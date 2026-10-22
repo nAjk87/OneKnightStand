@@ -1,0 +1,2182 @@
+
+
+mapfab(raw, "yee2.mapfab", "chr", "palette", "metatiles", "level")
+
+ct U NUM_PLAYERS = 4
+
+ct UU player_char_width = 8
+ct UU player_char_height = 8
+ct UU PLAYER_HEAD_OFFSET = 0
+ct UU PLAYER_BODY_HEIGHT = 8
+
+ct UU[NUM_PLAYERS] player_initial_x = UU[NUM_PLAYERS](40,60,80,100)
+ct UU[NUM_PLAYERS] player_initial_y = UU[NUM_PLAYERS](124,40,40,120)
+ct U NUM_SPAWN_POINTS = 13
+ct U LEVEL1_SPAWN_POINTS = 13
+ct U LEVEL2_SPAWN_POINTS = 9
+ct U LEVEL3_SPAWN_POINTS = 12
+ct U[NUM_SPAWN_POINTS] level1_spawn_point_x = U[NUM_SPAWN_POINTS](16, 16, 16, 48, 160, 224, 112, 16, 16, 80, 144, 112, 208)
+ct U[NUM_SPAWN_POINTS] level1_spawn_point_y = U[NUM_SPAWN_POINTS](16, 128, 192, 48, 64, 64, 112, 144, 176, 176, 176, 208, 176)
+ct U[NUM_SPAWN_POINTS] level2_spawn_point_x = U[NUM_SPAWN_POINTS](48, 64, 16, 96, 160, 224, 80, 80, 192, 48, 64, 16, 96)
+ct U[NUM_SPAWN_POINTS] level2_spawn_point_y = U[NUM_SPAWN_POINTS](0, 64, 16, 32, 32, 48, 80, 160, 192, 0, 64, 16, 32)
+ct U[LEVEL3_SPAWN_POINTS] level3_spawn_point_x = U[LEVEL3_SPAWN_POINTS](16, 224, 112, 112, 0, 240, 144, 112, 32, 208, 224, 176)
+ct U[LEVEL3_SPAWN_POINTS] level3_spawn_point_y = U[LEVEL3_SPAWN_POINTS](16, 16, 16, 80, 128, 160, 144, 192, 208, 176, 208, 64)
+
+// Base full-block collision table; additional shapes are defined below.
+ct U SOLID_METATILE_COUNT = 49
+ct Bool[SOLID_METATILE_COUNT] solid_metatile_table = Bool[SOLID_METATILE_COUNT](
+    false, true, true, false, false, false, false, false,
+    false, false, true, true, true, true, false, false,
+    true, true, true, false, false, false, false, false,
+    true, true, true, true, true, false, true, true,
+    true, true, true, false, false, false, false, false,
+    false, false, true, true, true, false, false, false,
+    true
+)
+ct U PLATFORM_TOP_METATILE_A = 62
+ct U PLATFORM_TOP_METATILE_B = 63
+ct U PLATFORM_TOP_METATILE_C = 78
+ct UU PLATFORM_TOP_HEIGHT = 1
+ct U PLATFORM_DROP_THROUGH_FRAMES = 10
+ct U COLL_SOLID = 1
+ct U COLL_PLATFORM = 2
+ct U COLL_LEFT_HALF = 4
+ct U COLL_RIGHT_HALF = 8
+ct U COLL_TOP_HALF = 16
+ct U COLL_BOTTOM_HALF = 32
+
+ct U katana_kill_min = 121
+ct U katana_kill_max = 124
+ct U KATANA_RIGHT = 0
+ct U KATANA_LEFT = 64
+ct U KATANA_UP = 1
+ct U KATANA_DOWN = 2
+ct Bool DISABLE_PLAYER_X_COLLISION = false
+ct U GROUND_ACCEL = 2
+ct U AIR_ACCEL = 1
+ct U GROUND_FRICTION = 3
+ct U GROUND_TURN_DECEL = 4
+ct U AIR_TURN_DECEL = 2
+ct U MAX_SPEED = 24
+ct U GRAVITY_JUMP_HELD = 3
+ct U GRAVITY_JUMP_RELEASED = 12
+ct U GRAVITY_FALL = 5
+ct U JUMP_START_VEL = 60
+ct U MAX_FALL_SPEED = 50
+ct U WALL_NONE = 255
+ct U WALL_SLIDE_MAX_FALL_SPEED = 14
+ct U WALL_JUMP_X_SPEED = 12
+ct U WALL_JUMP_Y_SPEED = 55
+ct U WALL_JUMP_LOCK_FRAMES = 3
+ct U WALL_JUMP_GRACE_FRAMES = 8
+ct U WALL_ATTACK_RECOIL_DISTANCE = 8
+ct UU WALL_ATTACK_RECOIL_CLOSE = 24
+ct UU WALL_ATTACK_RECOIL_NEAR = 20
+ct UU WALL_ATTACK_RECOIL_MID = 16
+ct UU WALL_ATTACK_RECOIL_FAR = 12
+ct U WALL_ATTACK_DOWN_BOUNCE = 40
+ct UU WORLD_WIDTH_PIXELS = 256
+ct UU WORLD_WIDTH_SUBPIXELS = 4096
+ct UU WORLD_HEIGHT_PIXELS = 240
+ct UU WORLD_HEIGHT_SUBPIXELS = 3840
+ct U HITSTOP_FRAMES = 0
+ct U KILL_FLASH_FRAMES = 10
+ct U RESPAWN_FRAMES = 120
+ct UU WIN_RETURN_FRAMES = 300
+ct U STARTING_LIVES = 5
+ct U NO_WINNER = 255
+ct U SPRITE_PALETTE_START = 12
+ct U KILL_FLASH_COLOR = $30
+ct U BG_ATTR_2_COLOR_2 = 7
+ct U BG_ATTR_2_COLOR_3 = 8
+ct U BG_ATTR_2_ANIM_FRAMES = 12
+ct U TITLE_JOIN_COUNT_TILE_0 = $B0
+ct U TITLE_JOIN_COUNT_TILE_1 = $B1
+ct U TITLE_STAGE_TILE_1 = $B1
+ct UU TITLE_STAGE_COUNT_ADDR = $234A
+ct UU TITLE_JOIN_ZONE_X_MIN = 96
+ct UU TITLE_JOIN_ZONE_X_MAX = 160
+ct UU TITLE_JOIN_ZONE_Y_MIN = 144
+ct UU TITLE_JOIN_ZONE_Y_MAX = 176
+
+// ---------------------------------------------------------------------------
+// Sprite/tile indices
+// ---------------------------------------------------------------------------
+// Players use one 8x8 sprite, plus a separate katana sprite.
+ct U PLAYER_IDLE_HEAD_TILE = 96
+ct U PLAYER_RUN_1_HEAD_TILE = 97
+ct U PLAYER_RUN_2_HEAD_TILE = 98
+ct U PLAYER_WALL_SLIDE_HEAD_TILE = 112
+ct U PLAYER_IDLE_NO_KATANA_HEAD_TILE = 99
+ct U PLAYER_RUN_1_NO_KATANA_HEAD_TILE = 100
+ct U PLAYER_RUN_2_NO_KATANA_HEAD_TILE = 101
+ct U PLAYER_WALL_SLIDE_NO_KATANA_HEAD_TILE = 113
+
+ct U CORPSE_LEFT_TILE = 114
+
+
+ct U KATANA_HORIZONTAL_START_TILE = 224
+ct U KATANA_HORIZONTAL_ACTIVE_TILE = 225
+ct U KATANA_HORIZONTAL_END_TILE = 226
+ct U KATANA_VERTICAL_START_TILE = 227
+ct U KATANA_VERTICAL_ACTIVE_TILE = 228
+ct U KATANA_VERTICAL_END_TILE = 229
+ct U DEATH_PARTICLE_TILE = 115
+
+ct U HUD_LIFE_HEAD_TILE = PLAYER_IDLE_HEAD_TILE
+ct U[NUM_PLAYERS] HUD_LIFE_X = U[NUM_PLAYERS](0, 248, 0, 248)
+ct U[NUM_PLAYERS] HUD_LIFE_Y = U[NUM_PLAYERS](8, 8, 208, 208)
+ct U DEATH_EFFECT_FRAMES = 30
+ct U NUM_DEATH_PARTICLES = 4
+ct U TOTAL_DEATH_PARTICLES = 16
+ct U DEATH_PARTICLE_GRAVITY = 2
+ct U DEATH_PARTICLE_MAX_FALL_SPEED = 32
+ct U DEATH_PARTICLE_DRAG_INTERVAL = 3
+ct U CORPSE_Y_OFFSET = 4
+ct U CORPSE_DRAW_Y_LIFT = 3
+ct U CORPSE_WIDTH = 8
+ct U CORPSE_HEIGHT = 4
+ct U CORPSE_X_SPEED = 28
+ct U CORPSE_Y_SPEED = 42
+ct U CORPSE_GRAVITY = 4
+ct U CORPSE_MAX_FALL_SPEED = 32
+ct U NUM_CORPSES = 12
+ct U[NUM_DEATH_PARTICLES] death_particle_start_x_vel = U[NUM_DEATH_PARTICLES](8,14,20,26)
+ct U[NUM_DEATH_PARTICLES] death_particle_start_y_vel = U[NUM_DEATH_PARTICLES](20,34,28,42)
+ct U[3] player_body_sprite_tiles = U[3](
+    PLAYER_IDLE_HEAD_TILE,
+    PLAYER_RUN_1_HEAD_TILE,
+    PLAYER_RUN_2_HEAD_TILE
+)
+ct U[3] player_body_no_katana_sprite_tiles = U[3](
+    PLAYER_IDLE_NO_KATANA_HEAD_TILE,
+    PLAYER_RUN_1_NO_KATANA_HEAD_TILE,
+    PLAYER_RUN_2_NO_KATANA_HEAD_TILE
+)
+ct U[3] katana_horizontal_sprite_tiles = U[3](
+    KATANA_HORIZONTAL_START_TILE,
+    KATANA_HORIZONTAL_ACTIVE_TILE,
+    KATANA_HORIZONTAL_END_TILE
+)
+ct U[3] katana_vertical_sprite_tiles = U[3](
+    KATANA_VERTICAL_START_TILE,
+    KATANA_VERTICAL_ACTIVE_TILE,
+    KATANA_VERTICAL_END_TILE
+)
+ct U[2] sprite_running_anim = U[2](1,2)
+ct U SPRITE_ROW_COUNT = 30
+
+
+
+vars /game_vars
+    CCC/levels lvl1_mt_map // Current screen's column-major metatile map
+    CC/metatiles mt_nw
+    CC/metatiles mt_ne
+    CC/metatiles mt_sw
+    CC/metatiles mt_se
+    CC/metatiles mt_attr
+    U[256] collision_map
+
+    U[NUM_PLAYERS] face        = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] want_face   = U[NUM_PLAYERS](0,0,0,0)
+
+    U[NUM_PLAYERS] katana_time = U[NUM_PLAYERS](120,120,120,120)
+    U[NUM_PLAYERS] katana_dir = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] clash_flash_timer = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] clash_flash_dir = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] death_timer = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] player_lives = U[NUM_PLAYERS](5,5,5,5)
+    U[NUM_PLAYERS] player_wins = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] player_life_flash_timer = U[NUM_PLAYERS](0,0,0,0)
+    Bool[NUM_PLAYERS] player_out = Bool[NUM_PLAYERS](false,false,false,false)
+    Bool game_over = false
+    Bool on_title_screen = true
+    U winner_player = 255
+    UU game_over_return_timer = 0
+    U title_join_count = 0
+    U title_join_last_count = 255
+    U title_ready_mask = 0
+    Bool title_join_dirty = true
+    U title_selected_stage = 1
+    Bool title_stage_dirty = true
+    Bool palette_dirty = false
+    U[25] base_palette
+    U bg_attr_2_anim_timer = 0
+    Bool bg_attr_2_anim_on = false
+    U spawn_rng_counter = 0
+    U spawn_random_offset = 0
+    U hitstop_timer = 0
+
+    UU[TOTAL_DEATH_PARTICLES] death_particle_x
+    UU[TOTAL_DEATH_PARTICLES] death_particle_y
+    U[TOTAL_DEATH_PARTICLES] death_particle_x_vel
+    U[TOTAL_DEATH_PARTICLES] death_particle_y_vel
+    U[TOTAL_DEATH_PARTICLES] death_particle_dir
+    U[TOTAL_DEATH_PARTICLES] death_particle_timer
+    Bool[TOTAL_DEATH_PARTICLES] death_particle_moving_up
+
+    U next_corpse_slot = 0
+    U[NUM_CORPSES] corpse_state // 0 hidden, 1 flying/collides, 2 landed, 3 looping/no collision
+    UU[NUM_CORPSES] corpse_x
+    UU[NUM_CORPSES] corpse_y
+    U[NUM_CORPSES] corpse_x_vel
+    U[NUM_CORPSES] corpse_y_vel
+    U[NUM_CORPSES] corpse_dir
+    U[NUM_CORPSES] corpse_face
+    U[NUM_CORPSES] corpse_palette
+    Bool[NUM_CORPSES] corpse_moving_up
+    U[SPRITE_ROW_COUNT] sprite_row_count
+
+    Bool[NUM_PLAYERS] is_player_on_ground = Bool[NUM_PLAYERS](false,false,false,false)
+    Bool[NUM_PLAYERS] is_wall_sliding      = Bool[NUM_PLAYERS](false,false,false,false)
+    Bool[NUM_PLAYERS] y_moving_up          = Bool[NUM_PLAYERS](false,false,false,false)
+    Bool[NUM_PLAYERS] jump_controlled      = Bool[NUM_PLAYERS](false,false,false,false)
+    Bool[NUM_PLAYERS] is_turning = Bool[NUM_PLAYERS](false,false,false,false)
+
+    UU[NUM_PLAYERS] player_x_vel = UU[NUM_PLAYERS](0,0,0,0)
+    UU[NUM_PLAYERS] player_y_vel = UU[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] wall_jump_lock_timer = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] wall_jump_grace_timer = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] wall_jump_grace_dir = U[NUM_PLAYERS](255,255,255,255)
+    U[NUM_PLAYERS] platform_drop_timer = U[NUM_PLAYERS](0,0,0,0)
+
+
+    UU[NUM_PLAYERS] knockback_x_vel = UU[NUM_PLAYERS](0,0,0,0)
+    UU[NUM_PLAYERS] knockback_y_vel = UU[NUM_PLAYERS](0,0,0,0)
+    U [NUM_PLAYERS] knockback_dir  = U[NUM_PLAYERS](0,0,0,0) // 0 = höger, 64 = vänster
+
+    UU[NUM_PLAYERS] player_x = UU[NUM_PLAYERS](
+        player_initial_x[0] << 4,
+        player_initial_x[1] << 4,
+        player_initial_x[2] << 4,
+        player_initial_x[3] << 4
+    )
+
+    UU[NUM_PLAYERS] player_y = UU[NUM_PLAYERS](
+        player_initial_y[0]<< 4,
+        player_initial_y[1] << 4,
+        player_initial_y[2] << 4,
+        player_initial_y[3] << 4
+    )
+
+
+    UU[NUM_PLAYERS] old_x = UU[NUM_PLAYERS](0,0,0,0)
+    UU[NUM_PLAYERS] old_y = UU[NUM_PLAYERS](0,0,0,0)
+
+    U[NUM_PLAYERS] player_sprite = U[NUM_PLAYERS](0,0,0,0)
+
+    U[NUM_PLAYERS] anim_timer = U[NUM_PLAYERS](0,0,0,0)
+    U[NUM_PLAYERS] anim_frame_index = U[NUM_PLAYERS](0,0,0,0) 
+    
+/*
+Loads one screen from a column-major map with a 16-metatile row stride.
+The visible screen is 32x30 background tiles.
+*/
+fn load_screen(CCC/levels my_lvl_pointer)
+    U chr_bank = read U(my_lvl_pointer)
+    CCC/palettes pal=read CCC/palettes(my_lvl_pointer)
+    CC/metatiles mymetatiles=@mt_metatiles
+    UU size = UU(read U(my_lvl_pointer)) // Consume stored width; this loader draws a fixed 16 columns.
+    //after all these reads, now my_lvl_pointer points to the metatiles matrix
+
+    // Mapper 30 uses CHR-RAM, so CHR must be copied into the PPU at runtime.
+    {PPUMASK}(0)
+    state(M30_CHR(chr_bank))
+    {PPUCTRL}(0)
+    ppu_reset_addr($0000)
+    ppu_upload_pbz.tiles(@chr_chr, 0)
+    state(M30_CHR(chr_bank))
+
+    // set palette
+    load_palette(pal)
+    store_base_palette()
+    ppu_upload_palette()
+       
+    UU mt_size = UU(read U(mymetatiles)) // number of metatiles
+    if mt_size == 0
+        mt_size = 256
+
+    lvl1_mt_map=my_lvl_pointer // the map is set in columns. it's in level.macrofab
+    
+    mt_nw=mymetatiles
+    mt_ne=mt_nw
+    mt_ne+=mt_size
+    mt_sw=mt_ne
+    mt_sw+=mt_size
+    mt_se=mt_sw
+    mt_se+=mt_size
+    mt_attr=mt_se
+    mt_attr+=mt_size
+    // now every pointer points where it should
+    build_collision_map()
+
+    ppu_reset_addr($2000) // first screen // https://www.nesdev.org/wiki/Mirroring
+
+    {PPUSTATUS}() // Reset the address latch before 'ppu_set_addr', just to be safe.
+    {PPUCTRL}(PPUCTRL_VRAM_32_DOWN) // Used to write columns of data.
+
+    // Upload the nametable.
+    UU i=0
+    UU ii=0
+
+    for UU x=0; x<16; x+=1
+        ppu_reset_addr($2000+ii)
+        for UU y=0; y<16; y+=1
+            U my_metatile=my_lvl_pointer{i}
+            U nw_tile=mt_nw[my_metatile]
+            U sw_tile=mt_sw[my_metatile]
+            {PPUDATA}(nw_tile)
+            {PPUDATA}(sw_tile)
+            i+=1
+        i-=16
+        ii+=1
+        ppu_reset_addr($2000+ii)
+        for UU y=0; y<16; y+=1
+            U my_metatile=my_lvl_pointer{i}
+            U ne_tile=mt_ne[my_metatile]
+            U se_tile=mt_se[my_metatile]
+            {PPUDATA}(ne_tile)
+            {PPUDATA}(se_tile)
+            i+=1
+        ii+=1
+
+    //upload first attributes data, we need to OR it together
+    //for every 2x2 metatiles block (https://www.nesdev.org/wiki/PPU_attribute_tables)
+    i=0
+    ii=0
+    for UU a=0; a<8; a+=1
+        for UU attri=0; attri<32; attri+=8
+            ppu_reset_addr($2000+960+a+attri)
+            U my_metatile=my_lvl_pointer{i} //tl
+            U my_attr=mt_attr[my_metatile]
+            //
+            my_metatile=my_lvl_pointer{i+16} // tr
+            my_attr|=(mt_attr[my_metatile]<<2)
+            //
+            my_metatile=my_lvl_pointer{i+1} //bl
+            my_attr|=(mt_attr[my_metatile]<<4)
+            //
+            my_metatile=my_lvl_pointer{i+17} //br
+            my_attr|=(mt_attr[my_metatile]<<6)
+            //
+            {PPUDATA}(my_attr)
+            //
+            my_metatile=my_lvl_pointer{i+8} //tl
+            my_attr=mt_attr[my_metatile]
+            //
+            my_metatile=my_lvl_pointer{i+16+8} // tr
+            my_attr|=(mt_attr[my_metatile]<<2)
+            //
+            my_metatile=my_lvl_pointer{i+1+8} //bl
+            my_attr|=(mt_attr[my_metatile]<<4)
+            //
+            my_metatile=my_lvl_pointer{i+17+8} //br
+            my_attr|=(mt_attr[my_metatile]<<6)
+            //
+            {PPUDATA}(my_attr)
+            i+=2
+        ii+=32
+        i=ii
+
+fn upload_title_join_count()
+    if !on_title_screen
+        return
+
+    if !title_join_dirty
+        return
+
+    title_join_dirty = false
+
+    ppu_reset_addr($21D1)
+
+    if title_join_count == 0
+        {PPUDATA}(TITLE_JOIN_COUNT_TILE_0)
+    else
+        {PPUDATA}(TITLE_JOIN_COUNT_TILE_1 + title_join_count - U(1))
+
+fn upload_title_stage_number()
+    if !on_title_screen
+        return
+
+    if !title_stage_dirty
+        return
+
+    title_stage_dirty = false
+
+    ppu_reset_addr(TITLE_STAGE_COUNT_ADDR)
+    {PPUDATA}(TITLE_STAGE_TILE_1 + title_selected_stage - U(1))
+
+
+nmi main_nmi()
+    // Update OAM and poll the pads:
+    ppu_upload_oam_poll_pads(0)
+
+    if palette_dirty
+        ppu_upload_palette()
+        palette_dirty = false
+
+    upload_title_join_count()
+    upload_title_stage_number()
+
+    // Turn on rendering:
+    {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP)
+
+    // Reset the scroll https://www.nesdev.org/wiki/PPU_scrolling
+    // and https://www.nesdev.org/wiki/Mirroring
+    ppu_reset_scroll_16(0, 0)
+    
+mode main()
+: nmi main_nmi
+
+    load_screen(@lev_title) // boot into the title level first
+    reset_match()
+    // Tell the NES to trigger NMI once per frame:
+    {PPUCTRL}(PPUCTRL_NMI_ON)
+
+    // Wait forever, one frame at a time:
+    while true
+        update_pads()
+        spawn_rng_counter += 1
+        update_bg_attr_2_palette_anim()
+        update_life_flash_timers()
+        update_death_effects()
+
+        if on_title_screen
+            update_title_join_count()
+            update_title_stage_select()
+            if title_join_count >= 2 && any_start_pressed()
+                start_selected_stage()
+
+        if game_over
+            update_corpses()
+            if winner_player != NO_WINNER
+                if death_timer[winner_player] == 0 && !player_out[winner_player]
+                    move_player_x(winner_player)
+                    move_player_y(winner_player)
+
+            if game_over_return_timer > 0
+                game_over_return_timer -= 1
+            else
+                return_to_title_screen()
+        else
+            if hitstop_timer > 0
+                hitstop_timer -= 1
+            else
+                update_death_timers()
+                update_corpses()
+                for U p=0; p < NUM_PLAYERS; p+=1
+                    if death_timer[p] == 0 && !player_out[p]
+                        move_player_x(p)
+                        move_player_y(p)
+                check_katanas()
+
+        update_sprites()
+        nmi // Wait for the next NMI
+
+fn any_start_pressed() Bool
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if pads[p].pressed & BUTTON_START
+            return true
+
+    return false
+
+fn any_select_pressed() Bool
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if pads[p].pressed & BUTTON_SELECT
+            return true
+
+    return false
+
+fn update_title_stage_select()
+    if any_select_pressed()
+        if title_selected_stage < 3
+            title_selected_stage += 1
+        else
+            title_selected_stage = 1
+        title_stage_dirty = true
+
+fn start_selected_stage()
+    U ready_mask = title_ready_mask
+    on_title_screen = false
+
+    if title_selected_stage == 3
+        load_screen(@lev_level3)
+    else if title_selected_stage == 2
+        load_screen(@lev_level2)
+    else
+        load_screen(@lev_level1)
+
+    reset_match()
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if !(ready_mask & (U(1) << p))
+            player_out[p] = true
+            death_timer[p] = 0
+
+    {PPUCTRL}(PPUCTRL_NMI_ON)
+
+fn return_to_title_screen()
+    if winner_player != NO_WINNER
+        if player_wins[winner_player] < STARTING_LIVES
+            player_wins[winner_player] += 1
+
+    on_title_screen = true
+    title_stage_dirty = true
+    title_join_last_count = 255
+    title_join_dirty = true
+
+    load_screen(@lev_title)
+    reset_match()
+    {PPUCTRL}(PPUCTRL_NMI_ON)
+
+fn player_in_title_join_zone(U p) Bool
+    UU px = (player_x[p] >> 4) + (player_char_width >> 1)
+    UU py = (player_y[p] >> 4) + (player_char_height >> 1)
+
+    if px >= TITLE_JOIN_ZONE_X_MIN && px < TITLE_JOIN_ZONE_X_MAX
+        if py >= TITLE_JOIN_ZONE_Y_MIN && py < TITLE_JOIN_ZONE_Y_MAX
+            return true
+
+    return false
+
+fn update_title_join_count()
+    U count = 0
+    U ready_mask = 0
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if death_timer[p] == 0 && !player_out[p]
+            if player_in_title_join_zone(p)
+                count += 1
+                ready_mask |= U(1) << p
+
+    title_join_count = count
+    title_ready_mask = ready_mask
+    if title_join_count != title_join_last_count
+        title_join_last_count = title_join_count
+        title_join_dirty = true
+
+fn clear_death_effects()
+    for U i = 0; i < TOTAL_DEATH_PARTICLES; i += 1
+        death_particle_timer[i] = 0
+
+fn clear_corpses()
+    for U c = 0; c < NUM_CORPSES; c += 1
+        corpse_state[c] = 0
+
+    next_corpse_slot = 0
+
+fn reset_match()
+    game_over = false
+    winner_player = NO_WINNER
+    game_over_return_timer = 0
+    hitstop_timer = 0
+
+    clear_death_effects()
+    clear_corpses()
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        player_lives[p] = STARTING_LIVES
+        player_life_flash_timer[p] = 0
+        player_out[p] = false
+        death_timer[p] = 0
+        face[p] = 0
+        want_face[p] = 0
+
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if on_title_screen
+            player_x[p] = player_initial_x[p] << 4
+            player_y[p] = player_initial_y[p] << 4
+            player_x_vel[p] = 0
+            player_y_vel[p] = 0
+            knockback_x_vel[p] = 0
+            knockback_y_vel[p] = 0
+            katana_time[p] = 120
+            katana_dir[p] = face[p]
+            clash_flash_timer[p] = 0
+            clash_flash_dir[p] = katana_dir[p]
+            player_sprite[p] = 0
+            anim_timer[p] = 0
+            anim_frame_index[p] = 0
+            is_player_on_ground[p] = false
+            is_wall_sliding[p] = false
+            y_moving_up[p] = false
+            jump_controlled[p] = false
+            is_turning[p] = false
+            wall_jump_lock_timer[p] = 0
+            wall_jump_grace_timer[p] = 0
+            wall_jump_grace_dir[p] = WALL_NONE
+        else
+            respawn_player_at_match_start(p)
+
+fn check_match_over()
+    U alive_count = 0
+    U last_alive = NO_WINNER
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if !player_out[p]
+            alive_count += 1
+            last_alive = p
+
+    if alive_count == 1
+        game_over = true
+        winner_player = last_alive
+        game_over_return_timer = WIN_RETURN_FRAMES
+    else if alive_count == 0
+        game_over = true
+        winner_player = NO_WINNER
+        game_over_return_timer = WIN_RETURN_FRAMES
+
+fn check_katanas()
+    U[NUM_PLAYERS] hits = U[NUM_PLAYERS](0)
+    U clash_mask = 0
+    U death_mask = 0
+    U active_katanas = 0
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if !player_out[p] && death_timer[p] == 0
+            if katana_time[p] >= katana_kill_min && katana_time[p] <= katana_kill_max
+                active_katanas += 1
+
+    if active_katanas == 0
+        return
+
+    // Collect sword-on-sword clashes without changing attack state.
+    if active_katanas > 1
+        for U a = 0; a < NUM_PLAYERS; a += 1
+            if player_out[a]
+                continue
+            if death_timer[a] > 0
+                continue
+            if katana_time[a] < katana_kill_min || katana_time[a] > katana_kill_max
+                continue
+
+            for U b = a + 1; b < NUM_PLAYERS; b += 1
+                if player_out[b]
+                    continue
+                if death_timer[b] > 0
+                    continue
+                if katana_time[b] < katana_kill_min || katana_time[b] > katana_kill_max
+                    continue
+
+                if katana_overlap(a, b)
+                    clash_mask |= U(1) << a
+                    clash_mask |= U(1) << b
+
+    // Collect every player hit. A player can hit several targets in one frame.
+    for U attacker = 0; attacker < NUM_PLAYERS; attacker += 1
+        if player_out[attacker]
+            continue
+        if death_timer[attacker] > 0
+            continue
+        if katana_time[attacker] >= katana_kill_min && katana_time[attacker] <= katana_kill_max
+            for U target = 0; target < NUM_PLAYERS; target += 1
+                if attacker != target
+                    if death_timer[target] == 0 && !player_out[target]
+                        if player_katana_hits_another_player(attacker, target)
+                            hits[attacker] |= U(1) << target
+
+    // A clash cancels every outgoing hit from the clashing player.
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if clash_mask & (U(1) << p)
+            katana_clash_player(p)
+        else
+            death_mask |= hits[p]
+
+    // Resolve all remaining deaths simultaneously.
+    for U victim = 0; victim < NUM_PLAYERS; victim += 1
+        if death_mask & (U(1) << victim)
+            U killer = victim
+
+            for U attacker = 0; attacker < NUM_PLAYERS; attacker += 1
+                if !(clash_mask & (U(1) << attacker))
+                    if hits[attacker] & (U(1) << victim)
+                        killer = attacker
+                        break
+
+            start_player_death(victim, killer)
+
+    check_match_over()
+
+fn start_player_death(U p, U attacker)
+    hitstop_timer = HITSTOP_FRAMES
+    start_player_corpse(p, attacker)
+    spawn_death_particles(p, attacker)
+
+    if on_title_screen
+        death_timer[p] = RESPAWN_FRAMES
+    else
+        if player_lives[p] > 0
+            player_lives[p] -= 1
+
+        player_life_flash_timer[p] = KILL_FLASH_FRAMES
+
+        if player_lives[p] == 0
+            death_timer[p] = 0
+            player_out[p] = true
+        else
+            death_timer[p] = RESPAWN_FRAMES
+
+    katana_time[p] = 120
+    clash_flash_timer[p] = 0
+    player_x_vel[p] = 0
+    player_y_vel[p] = 0
+    knockback_x_vel[p] = 0
+    knockback_y_vel[p] = 0
+    is_player_on_ground[p] = false
+    is_wall_sliding[p] = false
+    y_moving_up[p] = false
+    jump_controlled[p] = false
+    is_turning[p] = false
+    wall_jump_lock_timer[p] = 0
+    wall_jump_grace_timer[p] = 0
+    wall_jump_grace_dir[p] = WALL_NONE
+
+fn allocate_corpse_slot() U
+    U slot = next_corpse_slot
+
+    for U tries = 0; tries < NUM_CORPSES; tries += 1
+        if corpse_state[slot] == 0
+            next_corpse_slot = slot + 1
+            if next_corpse_slot >= NUM_CORPSES
+                next_corpse_slot = 0
+            return slot
+
+        slot += 1
+        if slot >= NUM_CORPSES
+            slot = 0
+
+    slot = next_corpse_slot
+    next_corpse_slot += 1
+    if next_corpse_slot >= NUM_CORPSES
+        next_corpse_slot = 0
+
+    return slot
+
+fn start_player_corpse(U p, U attacker)
+    U c = allocate_corpse_slot()
+    corpse_state[c] = 1
+
+    if player_x[p] > 64
+        corpse_x[c] = player_x[p] - 64
+    else
+        corpse_x[c] = player_x[p]
+
+    corpse_y[c] = player_y[p] + (UU(CORPSE_Y_OFFSET) << 4)
+    corpse_x_vel[c] = CORPSE_X_SPEED
+    corpse_y_vel[c] = CORPSE_Y_SPEED
+    corpse_face[c] = want_face[p]
+    corpse_palette[c] = p
+    corpse_moving_up[c] = true
+
+    // Throw the body horizontally in the direction of the killing attack.
+    if katana_dir[attacker] == KATANA_RIGHT || katana_dir[attacker] == KATANA_LEFT
+        corpse_dir[c] = katana_dir[attacker]
+    else
+        corpse_dir[c] = want_face[attacker]
+
+fn current_spawn_point_count() U
+    if title_selected_stage == 3
+        return LEVEL3_SPAWN_POINTS
+    if title_selected_stage == 2
+        return LEVEL2_SPAWN_POINTS
+
+    return LEVEL1_SPAWN_POINTS
+
+fn spawn_point_x_at(U spawn) U
+    if title_selected_stage == 3
+        return level3_spawn_point_x[spawn]
+    if title_selected_stage == 2
+        return level2_spawn_point_x[spawn]
+
+    return level1_spawn_point_x[spawn]
+
+fn spawn_point_y_at(U spawn) U
+    if title_selected_stage == 3
+        return level3_spawn_point_y[spawn]
+    if title_selected_stage == 2
+        return level2_spawn_point_y[spawn]
+
+    return level1_spawn_point_y[spawn]
+
+fn choose_spawn_point(U p) U
+    U spawn = spawn_rng_counter + spawn_random_offset + p
+    U spawn_count = current_spawn_point_count()
+    spawn_random_offset += 5
+
+    while spawn >= spawn_count
+        spawn -= spawn_count
+
+    return spawn
+
+fn place_player_at_spawn(U p, U spawn)
+    player_x[p] = UU(spawn_point_x_at(spawn)) << 4
+    player_y[p] = UU(spawn_point_y_at(spawn)) << 4
+    player_x_vel[p] = 0
+    player_y_vel[p] = 0
+    knockback_x_vel[p] = 0
+    knockback_y_vel[p] = 0
+    katana_time[p] = 120
+    katana_dir[p] = face[p]
+    clash_flash_timer[p] = 0
+    clash_flash_dir[p] = katana_dir[p]
+    player_sprite[p] = 0
+    anim_timer[p] = 0
+    anim_frame_index[p] = 0
+    is_player_on_ground[p] = false
+    is_wall_sliding[p] = false
+    y_moving_up[p] = false
+    jump_controlled[p] = false
+    is_turning[p] = false
+    wall_jump_lock_timer[p] = 0
+    wall_jump_grace_timer[p] = 0
+    wall_jump_grace_dir[p] = WALL_NONE
+
+fn respawn_player_at_match_start(U p)
+    U spawn = spawn_rng_counter + spawn_random_offset + p
+    U spawn_count = current_spawn_point_count()
+
+    while spawn >= spawn_count
+        spawn -= spawn_count
+
+    place_player_at_spawn(p, spawn)
+
+fn respawn_player(U p)
+    U spawn = choose_spawn_point(p)
+    place_player_at_spawn(p, spawn)
+
+fn update_death_timers()
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if death_timer[p] > 0 && !player_out[p]
+            death_timer[p] -= 1
+            if death_timer[p] == 0
+                respawn_player(p)
+
+fn sprite_palette_index(U p) U
+    return SPRITE_PALETTE_START + (p << 1) + p
+
+fn store_base_palette()
+    for U i = 0; i < len(palette); i += 1
+    : -unroll
+        base_palette[i] = palette[i]
+
+fn restore_player_palette(U p)
+    U base = sprite_palette_index(p)
+    palette[base] = base_palette[base]
+    palette[base + 1] = base_palette[base + 1]
+    palette[base + 2] = base_palette[base + 2]
+
+fn flash_player_palette(U p)
+    U base = sprite_palette_index(p)
+    palette[base] = KILL_FLASH_COLOR
+    palette[base + 1] = KILL_FLASH_COLOR
+    palette[base + 2] = KILL_FLASH_COLOR
+
+fn update_kill_flash_palette()
+    Bool should_upload = false
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        restore_player_palette(p)
+
+        if player_life_flash_timer[p] > 0
+            should_upload = true
+            if player_life_flash_timer[p] & 1
+                flash_player_palette(p)
+
+    if should_upload
+        palette_dirty = true
+
+fn update_bg_attr_2_palette_anim()
+    bg_attr_2_anim_timer += 1
+    if bg_attr_2_anim_timer >= BG_ATTR_2_ANIM_FRAMES
+        bg_attr_2_anim_timer = 0
+
+        if bg_attr_2_anim_on
+            bg_attr_2_anim_on = false
+            palette[BG_ATTR_2_COLOR_2] = base_palette[BG_ATTR_2_COLOR_2]
+        else
+            bg_attr_2_anim_on = true
+            palette[BG_ATTR_2_COLOR_2] = base_palette[BG_ATTR_2_COLOR_3]
+
+        palette_dirty = true
+
+fn update_life_flash_timers()
+    Bool had_flash = false
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if player_life_flash_timer[p] > 0
+            had_flash = true
+            player_life_flash_timer[p] -= 1
+
+    update_kill_flash_palette()
+
+    if had_flash
+        palette_dirty = true
+
+fn update_corpses()
+    for U c = 0; c < NUM_CORPSES; c += 1
+        if corpse_state[c] == 0
+            continue
+
+        // Once a corpse has wrapped around the world, keep the cool looping
+        // motion but stop doing map collision. This makes old corpses cheap.
+        if corpse_state[c] == 3
+            if corpse_x_vel[c] > 0
+                if corpse_dir[c] == 0
+                    corpse_x[c] += corpse_x_vel[c]
+                    if corpse_x[c] >= WORLD_WIDTH_SUBPIXELS
+                        corpse_x[c] -= WORLD_WIDTH_SUBPIXELS
+                else
+                    if corpse_x[c] >= corpse_x_vel[c]
+                        corpse_x[c] -= corpse_x_vel[c]
+                    else
+                        corpse_x[c] = WORLD_WIDTH_SUBPIXELS - (UU(corpse_x_vel[c]) - corpse_x[c])
+
+                corpse_x_vel[c] -= 1
+
+            if corpse_moving_up[c]
+                if corpse_y_vel[c] > CORPSE_GRAVITY
+                    corpse_y_vel[c] -= CORPSE_GRAVITY
+                    if corpse_y[c] >= corpse_y_vel[c]
+                        corpse_y[c] -= corpse_y_vel[c]
+                    else
+                        corpse_y[c] = WORLD_HEIGHT_SUBPIXELS - (UU(corpse_y_vel[c]) - corpse_y[c])
+                else
+                    corpse_y_vel[c] = 0
+                    corpse_moving_up[c] = false
+            else
+                corpse_y_vel[c] += CORPSE_GRAVITY
+                if corpse_y_vel[c] > CORPSE_MAX_FALL_SPEED
+                    corpse_y_vel[c] = CORPSE_MAX_FALL_SPEED
+
+                corpse_y[c] += corpse_y_vel[c]
+                if corpse_y[c] >= WORLD_HEIGHT_SUBPIXELS
+                    corpse_y[c] -= WORLD_HEIGHT_SUBPIXELS
+
+            continue
+
+        if corpse_state[c] != 1
+            continue
+
+        if corpse_x_vel[c] > 0
+            UU new_x = corpse_x[c]
+
+            if corpse_dir[c] == 0
+                new_x += corpse_x_vel[c]
+
+                if new_x + (UU(CORPSE_WIDTH) << 4) > WORLD_WIDTH_SUBPIXELS
+                    corpse_x_vel[c] = 0
+                else if is_corpse_wall_at_pixel((new_x >> 4) + UU(CORPSE_WIDTH) - 1, corpse_y[c] >> 4)
+                    corpse_x_vel[c] = 0
+                else
+                    corpse_x[c] = new_x
+            else
+                if corpse_x[c] > corpse_x_vel[c]
+                    new_x -= corpse_x_vel[c]
+
+                    if is_corpse_wall_at_pixel(new_x >> 4, corpse_y[c] >> 4)
+                        corpse_x_vel[c] = 0
+                    else
+                        corpse_x[c] = new_x
+                else
+                    corpse_x[c] = 0
+                    corpse_x_vel[c] = 0
+
+        if corpse_x_vel[c] > 0
+            corpse_x_vel[c] -= 1
+
+        if corpse_moving_up[c]
+            if corpse_y_vel[c] > CORPSE_GRAVITY
+                corpse_y_vel[c] -= CORPSE_GRAVITY
+                if corpse_y[c] >= corpse_y_vel[c]
+                    corpse_y[c] -= corpse_y_vel[c]
+                else
+                    corpse_y[c] = WORLD_HEIGHT_SUBPIXELS - (UU(corpse_y_vel[c]) - corpse_y[c])
+            else
+                corpse_y_vel[c] = 0
+                corpse_moving_up[c] = false
+        else
+            corpse_y_vel[c] += CORPSE_GRAVITY
+            if corpse_y_vel[c] > CORPSE_MAX_FALL_SPEED
+                corpse_y_vel[c] = CORPSE_MAX_FALL_SPEED
+
+            UU old_y = corpse_y[c]
+            corpse_y[c] += corpse_y_vel[c]
+            Bool wrapped_y = false
+            if corpse_y[c] >= WORLD_HEIGHT_SUBPIXELS
+                corpse_y[c] -= WORLD_HEIGHT_SUBPIXELS
+                wrapped_y = true
+                corpse_state[c] = 3
+
+            UU old_py = old_y >> 4
+            UU new_py = corpse_y[c] >> 4
+
+            if new_py > old_py && !wrapped_y
+                UU wanted = new_py - old_py
+                UU allowed = 0
+
+                for UU step = 1; step <= wanted; step += 1
+                    if is_corpse_ground_at_pixel(corpse_x[c] >> 4, old_py + step)
+                        break
+                    allowed += 1
+
+                if allowed < wanted
+                    corpse_y[c] = (old_py + allowed) << 4
+                    corpse_y_vel[c] = 0
+                    corpse_state[c] = 2
+
+fn spawn_death_particles(U p, U attacker)
+    U first = p << 2
+    U blood_dir = want_face[attacker]
+
+    if katana_dir[attacker] == KATANA_RIGHT || katana_dir[attacker] == KATANA_LEFT
+        blood_dir = katana_dir[attacker]
+
+    for U particle = 0; particle < NUM_DEATH_PARTICLES; particle += 1
+        U i = first + particle
+        death_particle_x[i] = player_x[p] + 64
+        death_particle_y[i] = player_y[p] + 96
+        death_particle_x_vel[i] = death_particle_start_x_vel[particle]
+        death_particle_y_vel[i] = death_particle_start_y_vel[particle]
+        death_particle_dir[i] = blood_dir
+        if particle == 0
+            if blood_dir == KATANA_RIGHT
+                death_particle_dir[i] = KATANA_LEFT
+            else
+                death_particle_dir[i] = KATANA_RIGHT
+        death_particle_timer[i] = DEATH_EFFECT_FRAMES
+        death_particle_moving_up[i] = true
+
+fn update_death_effects()
+    for U i = 0; i < TOTAL_DEATH_PARTICLES; i += 1
+        if death_particle_timer[i] == 0
+            continue
+
+        death_particle_timer[i] -= 1
+
+        if death_particle_dir[i] == 0
+            death_particle_x[i] += death_particle_x_vel[i]
+        else
+            death_particle_x[i] -= death_particle_x_vel[i]
+
+        if death_particle_x_vel[i] > 0 && (death_particle_timer[i] & DEATH_PARTICLE_DRAG_INTERVAL) == 0
+            death_particle_x_vel[i] -= 1
+
+        if death_particle_moving_up[i]
+            if death_particle_y_vel[i] > DEATH_PARTICLE_GRAVITY
+                death_particle_y_vel[i] -= DEATH_PARTICLE_GRAVITY
+                death_particle_y[i] -= death_particle_y_vel[i]
+            else
+                death_particle_y_vel[i] = 0
+                death_particle_moving_up[i] = false
+        else
+            death_particle_y_vel[i] += DEATH_PARTICLE_GRAVITY
+            if death_particle_y_vel[i] > DEATH_PARTICLE_MAX_FALL_SPEED
+                death_particle_y_vel[i] = DEATH_PARTICLE_MAX_FALL_SPEED
+            death_particle_y[i] += death_particle_y_vel[i]
+
+fn x_ranges_overlap_wrapped(UU ax, UU aw, UU bx, UU bw) Bool
+    if ax >= WORLD_WIDTH_PIXELS
+        ax -= WORLD_WIDTH_PIXELS
+    if bx >= WORLD_WIDTH_PIXELS
+        bx -= WORLD_WIDTH_PIXELS
+
+    UU ax_end = ax + aw
+    UU bx_end = bx + bw
+
+    if ax_end <= WORLD_WIDTH_PIXELS
+        if bx_end <= WORLD_WIDTH_PIXELS
+            if ax < bx_end && bx < ax_end
+                return true
+        else
+            if ax < (bx_end - WORLD_WIDTH_PIXELS) || bx < ax_end
+                return true
+    else
+        ax_end -= WORLD_WIDTH_PIXELS
+        if bx_end <= WORLD_WIDTH_PIXELS
+            if bx < ax_end || ax < bx_end
+                return true
+        else
+            return true
+
+    return false
+
+fn y_ranges_overlap_wrapped(UU ay, UU ah, UU by, UU bh) Bool
+    if ay >= WORLD_HEIGHT_PIXELS
+        ay -= WORLD_HEIGHT_PIXELS
+    if by >= WORLD_HEIGHT_PIXELS
+        by -= WORLD_HEIGHT_PIXELS
+
+    UU ay_end = ay + ah
+    UU by_end = by + bh
+
+    if ay_end <= WORLD_HEIGHT_PIXELS
+        if by_end <= WORLD_HEIGHT_PIXELS
+            if ay < by_end && by < ay_end
+                return true
+        else
+            if ay < (by_end - WORLD_HEIGHT_PIXELS) || by < ay_end
+                return true
+    else
+        ay_end -= WORLD_HEIGHT_PIXELS
+        if by_end <= WORLD_HEIGHT_PIXELS
+            if by < ay_end || ay < by_end
+                return true
+        else
+            return true
+
+    return false
+
+fn wrap_screen_y(U y) U
+    if UU(y) >= WORLD_HEIGHT_PIXELS
+        return U(UU(y) - WORLD_HEIGHT_PIXELS)
+
+    return y
+
+fn katana_overlap(U a, U b) Bool
+
+    UU ax = katana_clash_hitbox_x(a)
+    UU ay = katana_clash_hitbox_y(a)
+    UU aw = katana_clash_hitbox_w(a)
+    UU ah = katana_clash_hitbox_h(a)
+
+    UU bx = katana_clash_hitbox_x(b)
+    UU by = katana_clash_hitbox_y(b)
+    UU bw = katana_clash_hitbox_w(b)
+    UU bh = katana_clash_hitbox_h(b)
+
+    if x_ranges_overlap_wrapped(ax, aw, bx, bw)
+        if y_ranges_overlap_wrapped(ay, ah, by, bh)
+            return true
+
+    return false
+
+fn katana_hitbox_anchor_x(U p) UU
+    UU px = player_x[p] >> 4
+
+    if is_wall_sliding[p] && !is_player_on_ground[p]
+        if face[p] == KATANA_LEFT
+            return px + 4
+        if px > 4
+            return px - 4
+        return 0
+
+    return px
+
+fn katana_hitbox_base_x(U p) UU
+    UU px = katana_hitbox_anchor_x(p)
+
+    if katana_dir[p] == KATANA_RIGHT
+        return px + 6
+    if katana_dir[p] == KATANA_LEFT
+        if px >= 6
+            return px - 6
+        return WORLD_WIDTH_PIXELS - (6 - px)
+
+    return px
+
+fn katana_player_hitbox_x(U p) UU
+    UU px = katana_hitbox_anchor_x(p)
+
+    if katana_dir[p] == KATANA_UP || katana_dir[p] == KATANA_DOWN
+        return px
+
+    return katana_hitbox_base_x(p)
+
+fn katana_clash_hitbox_x(U p) UU
+    UU px = katana_hitbox_anchor_x(p)
+
+    if katana_dir[p] == KATANA_RIGHT
+        return px + 2
+    if katana_dir[p] == KATANA_LEFT
+        if px >= 6
+            return px - 6
+        return WORLD_WIDTH_PIXELS - (6 - px)
+    if katana_dir[p] == KATANA_UP || katana_dir[p] == KATANA_DOWN
+        return px
+
+    return katana_hitbox_base_x(p)
+
+fn katana_hitbox_base_y(U p) UU
+    UU py = player_y[p] >> 4
+
+    if katana_dir[p] == KATANA_UP
+        if py >= 8
+            return py - 8
+        return WORLD_HEIGHT_PIXELS - (8 - py)
+    if katana_dir[p] == KATANA_DOWN
+        return py + 10
+
+    return py
+
+fn katana_player_hitbox_y(U p) UU
+    if katana_dir[p] == KATANA_RIGHT || katana_dir[p] == KATANA_LEFT
+        return player_y[p] >> 4
+
+    return katana_hitbox_base_y(p)
+
+fn katana_clash_hitbox_y(U p) UU
+    UU py = player_y[p] >> 4
+
+    if katana_dir[p] == KATANA_RIGHT || katana_dir[p] == KATANA_LEFT
+        return py
+    if katana_dir[p] == KATANA_UP
+        if py >= 8
+            return py - 8
+        return WORLD_HEIGHT_PIXELS - (8 - py)
+    if katana_dir[p] == KATANA_DOWN
+        return py + 10
+
+    return katana_hitbox_base_y(p)
+
+fn katana_player_hitbox_w(U p) UU
+    if katana_dir[p] == KATANA_UP || katana_dir[p] == KATANA_DOWN
+        return 5
+
+    return 8
+
+fn katana_clash_hitbox_w(U p) UU
+    if katana_dir[p] == KATANA_RIGHT || katana_dir[p] == KATANA_LEFT
+        return 12
+    if katana_dir[p] == KATANA_UP || katana_dir[p] == KATANA_DOWN
+        return 3
+
+    return 8
+
+fn katana_player_hitbox_h(U p) UU
+    if katana_dir[p] == KATANA_RIGHT || katana_dir[p] == KATANA_LEFT
+        return 5
+
+    return 8
+
+fn katana_clash_hitbox_h(U p) UU
+    if katana_dir[p] == KATANA_RIGHT || katana_dir[p] == KATANA_LEFT
+        return 3
+    if katana_dir[p] == KATANA_UP || katana_dir[p] == KATANA_DOWN
+        return 12
+
+    return 8
+
+fn katana_clash_player(U p)
+    clash_flash_timer[p] = 2
+    clash_flash_dir[p] = katana_dir[p]
+    katana_time[p] = 90
+    player_x_vel[p] = 0
+    knockback_x_vel[p] = 40
+    knockback_y_vel[p] = 64
+
+    // Knock the player backwards, away from their own attack direction.
+    if want_face[p] == 0
+        knockback_dir[p] = 64
+    else
+        knockback_dir[p] = 0
+
+fn katana_wall_recoil(U p)
+    UU px = player_x[p] >> 4
+    UU py_top = (player_y[p] >> 4) + PLAYER_HEAD_OFFSET + 1
+    UU py_bottom = py_top + PLAYER_BODY_HEIGHT - 1
+    UU test_x
+    UU recoil = 0
+
+    if katana_dir[p] == KATANA_RIGHT
+        for U dist = 0; dist < WALL_ATTACK_RECOIL_DISTANCE; dist += 1
+            UU dist_px = UU(dist)
+            test_x = px + player_char_width + dist_px
+            if test_x >= WORLD_WIDTH_PIXELS
+                test_x -= WORLD_WIDTH_PIXELS
+
+            if is_solid_at_pixel(test_x, py_top) || is_solid_at_pixel(test_x, py_bottom)
+                if dist < 2
+                    recoil = WALL_ATTACK_RECOIL_CLOSE
+                else if dist < 4
+                    recoil = WALL_ATTACK_RECOIL_NEAR
+                else if dist < 6
+                    recoil = WALL_ATTACK_RECOIL_MID
+                else
+                    recoil = WALL_ATTACK_RECOIL_FAR
+
+                knockback_x_vel[p] = recoil
+                knockback_dir[p] = KATANA_LEFT
+                break
+    else if katana_dir[p] == KATANA_LEFT
+        for U dist = 0; dist < WALL_ATTACK_RECOIL_DISTANCE; dist += 1
+            UU dist_px = UU(dist)
+            if px > dist_px
+                test_x = px - 1 - dist_px
+            else
+                test_x = WORLD_WIDTH_PIXELS - (dist_px + 1 - px)
+
+            if is_solid_at_pixel(test_x, py_top) || is_solid_at_pixel(test_x, py_bottom)
+                if dist < 2
+                    recoil = WALL_ATTACK_RECOIL_CLOSE
+                else if dist < 4
+                    recoil = WALL_ATTACK_RECOIL_NEAR
+                else if dist < 6
+                    recoil = WALL_ATTACK_RECOIL_MID
+                else
+                    recoil = WALL_ATTACK_RECOIL_FAR
+
+                knockback_x_vel[p] = recoil
+                knockback_dir[p] = KATANA_RIGHT
+                break
+    else if katana_dir[p] == KATANA_DOWN
+        if is_player_on_ground[p]
+            player_y_vel[p] = WALL_ATTACK_DOWN_BOUNCE
+            y_moving_up[p] = true
+            jump_controlled[p] = false
+            is_player_on_ground[p] = false
+
+fn draw_player(U p, U i) U
+    U pcx = U(player_x[p] >> 4)
+    U pcy = U(player_y[p] >> 4)
+    U draw_x = pcx
+    U sprite_top = player_body_sprite_tiles[player_sprite[p]]
+    U player_attr = p + want_face[p]
+
+    if katana_time[p] != 120
+        sprite_top = player_body_no_katana_sprite_tiles[player_sprite[p]]
+
+    if is_wall_sliding[p] && !is_player_on_ground[p]
+        if katana_time[p] != 120
+            sprite_top = PLAYER_WALL_SLIDE_NO_KATANA_HEAD_TILE
+        else
+            sprite_top = PLAYER_WALL_SLIDE_HEAD_TILE
+
+        if face[p] == KATANA_LEFT
+            player_attr = p + ATTR_H_FLIP
+            draw_x = pcx + 1
+        else
+            player_attr = p
+            if pcx > 4
+                draw_x = pcx - 1
+            else
+                draw_x = 0
+
+    reserve_sprite_row(pcy, 1)
+    set_oam_x(i, draw_x)
+    set_oam_y(i, pcy)
+    set_oam_p(i, sprite_top)
+    set_oam_a(i, player_attr)
+    i += 4
+
+    if katana_time[p] > 120 || clash_flash_timer[p] > 0
+        U visual_katana_dir = katana_dir[p]
+        if clash_flash_timer[p] > 0 && katana_time[p] <= 120
+            visual_katana_dir = clash_flash_dir[p]
+
+        U katana_base_x = pcx
+        if is_wall_sliding[p] && !is_player_on_ground[p]
+            katana_base_x = draw_x
+
+        U katana_x = katana_base_x + 6
+        U katana_y = pcy
+        U katana_attr = p
+        U katana_tile = katana_horizontal_sprite_tiles[0]
+
+        if visual_katana_dir == KATANA_LEFT
+            if katana_base_x >= 6
+                katana_x = katana_base_x - 6
+            else
+                katana_x = U(WORLD_WIDTH_PIXELS - (UU(6) - UU(katana_base_x)))
+        else if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+            katana_x = katana_base_x
+
+        if visual_katana_dir == KATANA_UP
+            if pcy >= 8
+                katana_y = pcy - 8
+            else
+                katana_y = U(WORLD_HEIGHT_PIXELS - (UU(8) - UU(pcy)))
+        else if visual_katana_dir == KATANA_DOWN
+            katana_y = pcy + 10
+        katana_y = wrap_screen_y(katana_y)
+
+        if visual_katana_dir == KATANA_LEFT
+            katana_attr = p + ATTR_H_FLIP
+        else if visual_katana_dir == KATANA_UP
+            katana_attr = p + ATTR_V_FLIP
+            if want_face[p] == KATANA_LEFT
+                katana_attr += ATTR_H_FLIP
+        else if visual_katana_dir == KATANA_DOWN
+            if want_face[p] == KATANA_LEFT
+                katana_attr += ATTR_H_FLIP
+
+        if clash_flash_timer[p] > 0 && katana_time[p] <= 120
+            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+                katana_tile = katana_vertical_sprite_tiles[0]
+            else
+                katana_tile = katana_horizontal_sprite_tiles[0]
+        else if katana_time[p] >= 124
+            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+                katana_tile = katana_vertical_sprite_tiles[2]
+            else
+                katana_tile = katana_horizontal_sprite_tiles[2]
+        else if katana_time[p] >= 123
+            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+                katana_tile = katana_vertical_sprite_tiles[1]
+            else
+                katana_tile = katana_horizontal_sprite_tiles[1]
+        else
+            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+                katana_tile = katana_vertical_sprite_tiles[0]
+            else
+                katana_tile = katana_horizontal_sprite_tiles[0]
+
+        reserve_sprite_row(katana_y, 1)
+        set_oam(i, katana_x, katana_y, katana_tile, katana_attr)
+        i += 4
+
+    return i
+
+fn reset_sprite_row_counts()
+    for U row = 0; row < SPRITE_ROW_COUNT; row += 1
+        sprite_row_count[row] = 0
+
+fn sprite_row_from_y(U y) U
+    U row = y >> 3
+    if row >= SPRITE_ROW_COUNT
+        row = SPRITE_ROW_COUNT - 1
+    return row
+
+fn can_fit_sprite_row(U y, U amount) Bool
+    U row = sprite_row_from_y(y)
+    return sprite_row_count[row] + amount <= 8
+
+fn reserve_sprite_row(U y, U amount)
+    U row = sprite_row_from_y(y)
+    sprite_row_count[row] += amount
+
+fn hud_life_sprite_x(U p, U slot) U
+    U x = HUD_LIFE_X[p]
+
+    if p == 1 || p == 3
+        if slot == 1 || slot == 3
+            x -= 8
+    else
+        if slot == 1 || slot == 3
+            x += 8
+
+    return x
+
+fn hud_life_sprite_y(U p, U slot) U
+    U y = HUD_LIFE_Y[p]
+
+    if slot == 2 || slot == 3
+        y += 8
+    else if slot == 4
+        y += 16
+
+    return y
+
+fn draw_life_hud(U i) U
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if !player_out[p]
+            for U life = 0; life < player_lives[p]; life += 1
+                U x = hud_life_sprite_x(p, life)
+                U y = hud_life_sprite_y(p, life)
+
+                if i > 252 || !can_fit_sprite_row(y, 1)
+                    continue
+
+                reserve_sprite_row(y, 1)
+                set_oam_x(i, x)
+                set_oam_y(i, y)
+                set_oam_p(i, HUD_LIFE_HEAD_TILE)
+                set_oam_a(i, p)
+                i += 4
+
+    return i
+
+fn draw_title_win_hud(U i) U
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        for U win = 0; win < player_wins[p]; win += 1
+            U x = hud_life_sprite_x(p, win)
+            U y = hud_life_sprite_y(p, win)
+
+            if i > 252 || !can_fit_sprite_row(y, 1)
+                continue
+
+            reserve_sprite_row(y, 1)
+            set_oam_x(i, x)
+            set_oam_y(i, y)
+            set_oam_p(i, HUD_LIFE_HEAD_TILE)
+            set_oam_a(i, p)
+            i += 4
+
+    return i
+
+fn draw_death_effects(U i) U
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        U first = p << 2
+        for U particle = first; particle < first + NUM_DEATH_PARTICLES; particle += 1
+            if death_particle_timer[particle] > 0
+                U y = U(death_particle_y[particle] >> 4)
+
+                if i > 252
+                    return i
+                if !can_fit_sprite_row(y, 1)
+                    continue
+
+                reserve_sprite_row(y, 1)
+                set_oam_x(i, U(death_particle_x[particle] >> 4))
+                set_oam_y(i, y)
+                set_oam_p(i, DEATH_PARTICLE_TILE)
+                set_oam_a(i, 3)
+                i += 4
+
+    return i
+
+fn draw_corpses(U i) U
+    for U c = 0; c < NUM_CORPSES; c += 1
+        if corpse_state[c] == 0
+            continue
+
+        U pcx = U(corpse_x[c] >> 4)
+        U pcy = U(corpse_y[c] >> 4)
+        if pcy > CORPSE_DRAW_Y_LIFT
+            pcy -= CORPSE_DRAW_Y_LIFT
+        U corpse_attr = corpse_palette[c]
+
+        if i > 252 || !can_fit_sprite_row(pcy, 1)
+            corpse_state[c] = 0
+            continue
+
+        reserve_sprite_row(pcy, 1)
+
+        if corpse_face[c] == 0
+            set_oam_x(i, pcx)
+            set_oam_y(i, pcy)
+            set_oam_p(i, CORPSE_LEFT_TILE)
+            set_oam_a(i, corpse_attr)
+            i += 4
+        else
+            corpse_attr += ATTR_H_FLIP
+            set_oam_x(i, pcx)
+            set_oam_y(i, pcy)
+            set_oam_p(i, CORPSE_LEFT_TILE)
+            set_oam_a(i, corpse_attr)
+            i += 4
+
+    return i
+
+fn update_sprites()
+    U i = 0
+    reset_sprite_row_counts()
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if death_timer[p] == 0 && !player_out[p]
+            i = draw_player(p, i)
+
+    if on_title_screen
+        i = draw_title_win_hud(i)
+    else
+        i = draw_life_hud(i)
+    i = draw_death_effects(i)
+    i = draw_corpses(i)
+
+    // Clear the remainder of OAM
+    hide_oam(i)
+
+// this function calculates the movements of the player character
+fn move_player_x(U p)
+    normal_x_mov(p)
+    apply_position_x_subpixel(p)
+    if clash_flash_timer[p] > 0
+        clash_flash_timer[p] -= 1
+    // --------------------------------
+    // KATANA
+    // --------------------------------
+    if katana_time[p] < 120
+        katana_time[p] += 1
+    if katana_time[p] > 120
+        katana_time[p] += 1
+        if katana_time[p] > 124
+            katana_time[p] = 90
+    if (pads[p].pressed & BUTTON_B) && katana_time[p] == 120
+        if pads[p].held & BUTTON_UP
+            katana_dir[p] = KATANA_UP
+        else if pads[p].held & BUTTON_DOWN
+            katana_dir[p] = KATANA_DOWN
+        else if is_wall_sliding[p]
+            if wall_jump_grace_dir[p] == KATANA_LEFT
+                katana_dir[p] = KATANA_RIGHT
+            else
+                katana_dir[p] = KATANA_LEFT
+        else
+            katana_dir[p] = want_face[p]
+        katana_time[p] = 121
+        katana_wall_recoil(p)
+
+
+fn normal_x_mov(U p)
+    // --------------------------------
+    // FACE
+    // --------------------------------
+    if pads[p].held & BUTTON_LEFT
+        want_face[p] = 64
+        is_turning[p] = (face[p] != 64)
+    else if pads[p].held & BUTTON_RIGHT
+        want_face[p] = 0
+        is_turning[p] = (face[p] != 0)
+    else
+        if !is_turning[p]
+            want_face[p] = face[p]   // ingen input
+
+    // --------------------------------
+    // ANIMATION
+    // --------------------------------
+    if  pads[p].held & BUTTON_LEFT || pads[p].held & BUTTON_RIGHT
+        player_sprite[p] = sprite_running_anim[anim_frame_index[p]]
+        anim_timer[p] += 1
+        if anim_timer[p] > 3
+            anim_timer[p] = 0
+            anim_frame_index[p] += 1
+            if anim_frame_index[p] > 1
+                anim_frame_index[p] = 0
+    else
+        anim_timer[p] = 0
+        anim_frame_index[p] = 0
+        player_sprite[p] = 0
+
+    // --------------------------------
+    // ACCELERATION
+    // --------------------------------
+
+    U accel = GROUND_ACCEL
+    if !is_player_on_ground[p]
+        accel = AIR_ACCEL
+
+    if wall_jump_lock_timer[p] > 0
+        wall_jump_lock_timer[p] -= 1
+        return
+
+    if pads[p].held & BUTTON_LEFT || pads[p].held & BUTTON_RIGHT
+        if is_player_on_ground[p]
+            if want_face[p] == face[p]
+                // normal mark-acc
+                player_x_vel[p] += accel
+            // annars: låt TURN BRAKE sköta det
+        else
+            // LUFT: alltid påverkan
+            if want_face[p] == face[p]
+                player_x_vel[p] += accel      // luft-acc
+            else
+                if player_x_vel[p] > AIR_TURN_DECEL
+                    player_x_vel[p] -= AIR_TURN_DECEL
+                else
+                    player_x_vel[p] = 0
+                    face[p] = want_face[p]
+                    is_turning[p] = false
+
+
+    // TURN BRAKE – ENDAST PÅ MARKEN
+    if is_player_on_ground[p] && want_face[p] != face[p]
+        if player_x_vel[p] > GROUND_TURN_DECEL
+            player_x_vel[p] -= GROUND_TURN_DECEL
+        else
+            player_x_vel[p] = 0
+            face[p] = want_face[p]
+
+    if player_x_vel[p] > MAX_SPEED
+        player_x_vel[p] = MAX_SPEED
+    
+fn apply_position_x_subpixel(U p)
+    // 1. Save old position
+    old_x[p] = player_x[p]
+
+    // --------------------------------------------------
+    // 2. PLAYER FORCE (magnitud + riktning)
+    // --------------------------------------------------
+    UU player_force = player_x_vel[p]
+    U  player_dir   = face[p]
+
+    // --------------------------------------------------
+    // 3. KNOCKBACK FORCE
+    // --------------------------------------------------
+    Bool has_kb = (knockback_x_vel[p] > 0)
+    UU kb_force = 0
+    U  kb_dir   = 0
+
+    if has_kb
+        kb_force = knockback_x_vel[p]
+        kb_dir   = knockback_dir[p]
+
+    // --------------------------------------------------
+    // 4. COMBINE FORCES (unsigned vector math)
+    // --------------------------------------------------
+    UU total_force
+    U  force_dir
+
+    if !has_kb
+        total_force = player_force
+        force_dir   = player_dir
+    else
+        if kb_dir == player_dir
+            // same direction → add
+            total_force = player_force + kb_force
+            force_dir   = player_dir
+        else
+            // opposite directions → subtract
+            if kb_force > player_force
+                total_force = kb_force - player_force
+                force_dir   = kb_dir
+            else
+                total_force = player_force - kb_force
+                force_dir   = player_dir
+
+    // --------------------------------------------------
+    // 5. CLAMP
+    // --------------------------------------------------
+    
+    if has_kb
+        if total_force > (MAX_SPEED + MAX_SPEED)
+            total_force = MAX_SPEED + MAX_SPEED
+    else if total_force > MAX_SPEED
+        total_force = MAX_SPEED
+
+    // --------------------------------------------------
+    // 6. APPLY MOVEMENT
+    // --------------------------------------------------
+    if force_dir == 0
+        player_x[p] += total_force
+        if player_x[p] >= WORLD_WIDTH_SUBPIXELS
+            player_x[p] -= WORLD_WIDTH_SUBPIXELS
+    else
+        if player_x[p] >= total_force
+            player_x[p] -= total_force
+        else
+            player_x[p] = WORLD_WIDTH_SUBPIXELS - (total_force - player_x[p])
+
+    // --------------------------------------------------
+    // 7. X COLLISION
+    // Cheap edge check: movement is smaller than the narrowest 8px solid,
+    // so checking the new leading edge is enough for normal player motion.
+    // --------------------------------------------------
+    UU old_px = old_x[p] >> 4
+    UU new_px = player_x[p] >> 4
+
+    if !DISABLE_PLAYER_X_COLLISION && force_dir == 0 && new_px != old_px
+        UU test_x = new_px + player_char_width - 1
+        if test_x >= WORLD_WIDTH_PIXELS
+            test_x -= WORLD_WIDTH_PIXELS
+
+        if is_wall_at_pixel(p, test_x)
+            UU wall_left = (test_x >> 3) << 3
+            UU allowed_px
+            if wall_left >= player_char_width
+                allowed_px = wall_left - player_char_width
+            else
+                allowed_px = WORLD_WIDTH_PIXELS - (player_char_width - wall_left)
+
+            player_x[p] = allowed_px << 4
+            player_x_vel[p] = 0
+            knockback_x_vel[p] = 0
+
+    if !DISABLE_PLAYER_X_COLLISION && force_dir == 64 && new_px != old_px
+        UU test_x = new_px
+
+        if is_wall_at_pixel(p, test_x)
+            UU allowed_px = ((test_x >> 3) + 1) << 3
+            if allowed_px >= WORLD_WIDTH_PIXELS
+                allowed_px -= WORLD_WIDTH_PIXELS
+
+            player_x[p] = allowed_px << 4
+            player_x_vel[p] = 0
+            knockback_x_vel[p] = 0
+
+    // --------------------------------------------------
+    // 8. FRICTION (ENDAST NÄR INGEN INPUT & PÅ MARKEN)
+    // --------------------------------------------------
+    if is_player_on_ground[p]
+        if !(pads[p].held & BUTTON_LEFT) && !(pads[p].held & BUTTON_RIGHT)
+            if player_x_vel[p] > GROUND_FRICTION
+                player_x_vel[p] -= GROUND_FRICTION
+            else
+                player_x_vel[p] = 0
+
+    // --------------------------------------------------
+    // 9. DECAY KNOCKBACK
+    // --------------------------------------------------
+    if has_kb
+        if knockback_x_vel[p] > 0
+            knockback_x_vel[p] -= 2
+
+fn move_player_y(U p)
+    normal_y_mov(p)
+
+        
+
+fn normal_y_mov(U p)
+    Bool was_on_ground = is_player_on_ground[p]
+    U wall_contact_dir = WALL_NONE
+    if !is_player_on_ground[p]
+        wall_contact_dir = wall_slide_contact_dir(p)
+
+    U wall_dir = wall_contact_dir
+
+    if wall_dir != WALL_NONE
+        wall_jump_grace_timer[p] = WALL_JUMP_GRACE_FRAMES
+        wall_jump_grace_dir[p] = wall_dir
+
+    if (pads[p].pressed & BUTTON_A) && is_player_on_ground[p]
+        if pads[p].held & BUTTON_DOWN
+            platform_drop_timer[p] = PLATFORM_DROP_THROUGH_FRAMES
+            is_player_on_ground[p] = false
+        else
+            player_y_vel[p] = JUMP_START_VEL
+            y_moving_up[p] = true
+            jump_controlled[p] = true
+            is_player_on_ground[p] = false
+
+    if (pads[p].pressed & BUTTON_A) && !was_on_ground
+        if wall_dir == WALL_NONE
+            if wall_jump_grace_timer[p] > 0
+                wall_dir = wall_jump_grace_dir[p]
+
+        if wall_dir != WALL_NONE
+            if !y_moving_up[p] || player_y_vel[p] == 0
+                player_y_vel[p] = WALL_JUMP_Y_SPEED
+                y_moving_up[p] = true
+                jump_controlled[p] = true
+                is_wall_sliding[p] = false
+                wall_jump_lock_timer[p] = WALL_JUMP_LOCK_FRAMES
+                wall_jump_grace_timer[p] = 0
+                wall_jump_grace_dir[p] = WALL_NONE
+
+                if wall_dir == KATANA_LEFT
+                    face[p] = KATANA_RIGHT
+                    want_face[p] = KATANA_RIGHT
+                else
+                    face[p] = KATANA_LEFT
+                    want_face[p] = KATANA_LEFT
+
+                player_x_vel[p] = WALL_JUMP_X_SPEED
+
+    if wall_dir == WALL_NONE
+        if wall_jump_grace_timer[p] > 0
+            wall_jump_grace_timer[p] -= 1
+
+    // Releasing A stops a controlled jump immediately.
+    if y_moving_up[p] && jump_controlled[p] && !(pads[p].held & BUTTON_A)
+        jump_controlled[p] = false
+        player_y_vel[p] = 0
+        y_moving_up[p] = false
+
+    if knockback_y_vel[p] > 0
+        player_y_vel[p] += knockback_y_vel[p]
+        y_moving_up[p] = true
+        jump_controlled[p] = false
+        is_player_on_ground[p] = false
+        knockback_y_vel[p] = 0
+
+    apply_position_y_subpixel(p, wall_contact_dir)
+
+    if platform_drop_timer[p] > 0
+        platform_drop_timer[p] -= 1
+
+fn apply_position_y_subpixel(U p, U wall_dir)
+    is_wall_sliding[p] = false
+
+    if y_moving_up[p]
+        U gravity = GRAVITY_JUMP_RELEASED
+        if jump_controlled[p]
+            gravity = GRAVITY_JUMP_HELD
+
+        if player_y_vel[p] > gravity
+            player_y_vel[p] -= gravity
+        else
+            player_y_vel[p] = 0
+            y_moving_up[p] = false
+            jump_controlled[p] = false
+    else
+        player_y_vel[p] += GRAVITY_FALL
+        if wall_jump_lock_timer[p] == 0 && !is_player_on_ground[p]
+            if wall_dir != WALL_NONE
+                is_wall_sliding[p] = true
+                player_x_vel[p] = 0
+
+                if wall_dir == KATANA_LEFT
+                    face[p] = KATANA_RIGHT
+                    want_face[p] = KATANA_RIGHT
+                else
+                    face[p] = KATANA_LEFT
+                    want_face[p] = KATANA_LEFT
+
+                if player_y_vel[p] > WALL_SLIDE_MAX_FALL_SPEED
+                    player_y_vel[p] = WALL_SLIDE_MAX_FALL_SPEED
+            else
+                if player_y_vel[p] > MAX_FALL_SPEED
+                    player_y_vel[p] = MAX_FALL_SPEED
+        else
+            if player_y_vel[p] > MAX_FALL_SPEED
+                player_y_vel[p] = MAX_FALL_SPEED
+
+    // 4. SAVE OLD POSITION
+    old_y[p] = player_y[p]
+
+    // 5. APPLY VELOCITY
+    if y_moving_up[p]
+        if player_y[p] >= player_y_vel[p]
+            player_y[p] -= player_y_vel[p]
+        else
+            player_y[p] = WORLD_HEIGHT_SUBPIXELS - (player_y_vel[p] - player_y[p])
+    else
+        player_y[p] += player_y_vel[p]
+        if player_y[p] >= WORLD_HEIGHT_SUBPIXELS
+            player_y[p] -= WORLD_HEIGHT_SUBPIXELS
+
+    // 6. PIXEL DELTA
+    UU old_py = old_y[p] >> 4
+    UU new_py = player_y[p] >> 4
+    Bool wrapped_y = false
+    if y_moving_up[p] && new_py > old_py
+        wrapped_y = true
+    else if !y_moving_up[p] && new_py < old_py
+        wrapped_y = true
+
+    // ---- FALL / GROUND ----
+    if !y_moving_up[p] && new_py != old_py && !wrapped_y
+        UU px_left  = player_x[p] >> 4
+        UU px_right = px_left + player_char_width - 1
+        UU old_foot_y = old_py + PLAYER_BODY_HEIGHT + PLAYER_HEAD_OFFSET
+        UU new_foot_y = new_py + PLAYER_BODY_HEIGHT + PLAYER_HEAD_OFFSET
+        Bool ignore_platforms = platform_drop_timer[p] > 0
+
+        UU landing_py = landing_top_for_foot(px_left, old_foot_y, new_foot_y, ignore_platforms)
+        UU right_landing_py = landing_top_for_foot(px_right, old_foot_y, new_foot_y, ignore_platforms)
+        if right_landing_py < landing_py
+            landing_py = right_landing_py
+
+        if landing_py < WORLD_HEIGHT_PIXELS
+            player_y[p] = landing_py << 4
+            player_y_vel[p] = 0
+            is_player_on_ground[p] = true
+            is_wall_sliding[p] = false
+            jump_controlled[p] = false
+        else
+            is_player_on_ground[p] = false
+    else if wrapped_y
+        is_player_on_ground[p] = false
+
+    // ---- TAK ----
+    if y_moving_up[p] && new_py != old_py && !wrapped_y
+        UU wanted
+        wanted = old_py - new_py
+
+        UU allowed = 0
+
+        for UU step = 1; step <= wanted; step += 1
+            UU test_y
+            test_y = old_py - step
+            if is_ceiling_at_pixel(p,test_y)
+                break
+            allowed += 1
+
+        if allowed < wanted
+            UU allowed_py
+            if old_py >= allowed
+                allowed_py = old_py - allowed
+            else
+                allowed_py = WORLD_HEIGHT_PIXELS - (allowed - old_py)
+            player_y[p] = allowed_py << 4
+            player_y_vel[p] = 0
+            y_moving_up[p] = false
+            is_wall_sliding[p] = false
+            jump_controlled[p] = false
+
+fn ppu_reset_scroll_16(UU x, UU y)
+    ppu_reset_scroll(x.a, y.a) // the 9th bits should go to ppuctrl right after
+    {PPUCTRL}(PPUCTRL_NMI_ON | (x.b & 1) | ((y.b & 1)<<1))  // Set PPU control register, we want NMIs
+
+fn is_solid_metatile(U mt) Bool
+    // Marked frame/corner pieces fill the entire 16x16 collision box.
+    if mt == 58 || mt == 59 || mt == 60 || mt == 79 || mt == 94 || mt == 95 || mt == 111
+        return true
+
+    if mt < SOLID_METATILE_COUNT
+        return solid_metatile_table[mt]
+
+    return false
+
+fn is_platform_top_metatile(U mt) Bool
+    if mt == PLATFORM_TOP_METATILE_A || mt == PLATFORM_TOP_METATILE_B || mt == PLATFORM_TOP_METATILE_C
+        return true
+
+    return false
+
+fn collision_flags_for_metatile(U mt) U
+    // Half blocks are solid from every direction; the other half is air.
+    // These IDs refer to the metatile sheet, not the CHR tile sheet.
+    if mt == 96 || mt == 112 || mt == 128
+        return COLL_LEFT_HALF
+    if mt == 97 || mt == 113 || mt == 129
+        return COLL_RIGHT_HALF
+    if mt == 105 || mt == 106 || mt == 107
+        return COLL_TOP_HALF
+    if mt == 108 || mt == 109 || mt == 110
+        return COLL_BOTTOM_HALF
+
+    U flags = 0
+
+    if is_solid_metatile(mt)
+        flags |= COLL_SOLID
+
+    if is_platform_top_metatile(mt)
+        flags |= COLL_PLATFORM
+
+    return flags
+
+fn build_collision_map()
+    for UU i = 0; i < 256; i += 1
+        U mt = lvl1_mt_map{i}
+        collision_map[U(i)] = collision_flags_for_metatile(mt)
+
+fn collision_flags_at_pixel(UU x, UU y) U
+    if x >= WORLD_WIDTH_PIXELS
+        x -= WORLD_WIDTH_PIXELS
+    if y >= WORLD_HEIGHT_PIXELS
+        y -= WORLD_HEIGHT_PIXELS
+
+    U index = U(((x >> 4) << 4) + (y >> 4))
+    return collision_map[index]
+
+fn collision_flags_solid_at_pixel(U flags, UU x, UU y) Bool
+    // Keep the common air/full-block/platform path short.
+    if flags < COLL_LEFT_HALF
+        return (flags & COLL_SOLID) != 0
+    // Bit 3 is the local 8px half, also across the 256x240 world wrap.
+    if (flags & COLL_LEFT_HALF) && !(x & 8)
+        return true
+    if (flags & COLL_RIGHT_HALF) && (x & 8)
+        return true
+    if (flags & COLL_TOP_HALF) && !(y & 8)
+        return true
+    if (flags & COLL_BOTTOM_HALF) && (y & 8)
+        return true
+
+    return false
+
+fn is_solid_at_pixel(UU x, UU y) Bool
+    U flags = collision_flags_at_pixel(x, y)
+    return collision_flags_solid_at_pixel(flags, x, y)
+
+fn is_ground_metatile_at_pixel(UU x, UU y, Bool ignore_platforms) Bool
+    U flags = collision_flags_at_pixel(x, y)
+
+    if collision_flags_solid_at_pixel(flags, x, y)
+        return true
+
+    if !ignore_platforms && (flags & COLL_PLATFORM)
+        UU tile_y = y - ((y >> 4) << 4)
+        if tile_y < PLATFORM_TOP_HEIGHT
+            return true
+
+    return false
+
+fn landing_py_from_tile_top(UU tile_top) UU
+    UU landing_offset = PLAYER_BODY_HEIGHT + PLAYER_HEAD_OFFSET + 1
+
+    if tile_top >= landing_offset
+        return tile_top - landing_offset
+
+    return WORLD_HEIGHT_PIXELS - (landing_offset - tile_top)
+
+fn landing_top_for_foot(UU x, UU old_foot_y, UU new_foot_y, Bool ignore_platforms) UU
+    UU test_foot_y = new_foot_y
+    if test_foot_y >= WORLD_HEIGHT_PIXELS
+        test_foot_y -= WORLD_HEIGHT_PIXELS
+
+    U flags = collision_flags_at_pixel(x, test_foot_y)
+    UU tile_top = (test_foot_y >> 4) << 4
+
+    if collision_flags_solid_at_pixel(flags, x, test_foot_y)
+        // Bottom halves start 8px below the metatile's top edge.
+        if flags & COLL_BOTTOM_HALF
+            tile_top += 8
+        return landing_py_from_tile_top(tile_top)
+
+    if !ignore_platforms && (flags & COLL_PLATFORM)
+        if old_foot_y <= tile_top && new_foot_y >= tile_top
+            return landing_py_from_tile_top(tile_top)
+
+    return WORLD_HEIGHT_PIXELS
+
+fn is_wall_at_pixel(U p, UU px) Bool
+    UU py_top    = (player_y[p] >> 4) + PLAYER_HEAD_OFFSET + 1
+    UU py_bottom = py_top + PLAYER_BODY_HEIGHT - 1
+
+    if is_solid_at_pixel(px, py_top)
+        return true
+    if is_solid_at_pixel(px, py_bottom)
+        return true
+    return false
+
+fn is_corpse_wall_at_pixel(UU px, UU py_top) Bool
+    UU py_bottom = py_top + UU(CORPSE_HEIGHT) - 1
+
+    if is_solid_at_pixel(px, py_top)
+        return true
+    if is_solid_at_pixel(px, py_bottom)
+        return true
+    return false
+
+fn is_wall_slide_at_pixel(U p, UU px) Bool
+    UU py = (player_y[p] >> 4) + PLAYER_HEAD_OFFSET + PLAYER_BODY_HEIGHT - 1
+
+    if is_solid_at_pixel(px, py)
+        return true
+    return false
+
+fn wall_slide_contact_dir(U p) U
+    UU px_left = player_x[p] >> 4
+
+    if pads[p].held & BUTTON_LEFT
+        if px_left > 0
+            if is_wall_slide_at_pixel(p, px_left - 1)
+                return KATANA_LEFT
+
+    if pads[p].held & BUTTON_RIGHT
+        if is_wall_slide_at_pixel(p, px_left + player_char_width)
+            return KATANA_RIGHT
+
+    return WALL_NONE
+
+fn is_corpse_ground_at_pixel(UU px_left, UU py) Bool
+    UU px_right = px_left + UU(CORPSE_WIDTH) - 1
+    UU test_y = py + UU(CORPSE_HEIGHT)
+
+    if is_ground_metatile_at_pixel(px_left, test_y, false)
+        return true
+    if is_ground_metatile_at_pixel(px_right, test_y, false)
+        return true
+    return false
+
+fn is_ceiling_at_pixel(U p, UU py) Bool
+    UU head_y = py + PLAYER_HEAD_OFFSET +1
+
+    UU px_left  = player_x[p] >> 4
+    UU px_right = px_left + player_char_width - 1
+
+    if is_solid_at_pixel(px_left, head_y)
+        return true
+    if is_solid_at_pixel(px_right, head_y)
+        return true
+    return false
+
+
+fn player_katana_hits_another_player(U player, U target) Bool
+    UU katana_x = katana_player_hitbox_x(player)
+    UU katana_y = katana_player_hitbox_y(player)
+    UU katana_w = katana_player_hitbox_w(player)
+    UU katana_h = katana_player_hitbox_h(player)
+
+    // target hitbox = sprite-box
+    UU target_w = player_char_width
+    UU target_h = player_char_height
+
+    UU target_x = player_x[target] >> 4
+    UU target_y = player_y[target] >> 4
+
+    if x_ranges_overlap_wrapped(katana_x, katana_w, target_x, target_w)
+        if y_ranges_overlap_wrapped(katana_y, katana_h, target_y, target_h)
+            return true
+
+    return false

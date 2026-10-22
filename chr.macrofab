@@ -1,0 +1,12 @@
+#:name:# 
+#:path:# 
+
+// Mapper 30 has CHR-RAM, not CHR-ROM.
+// Keep using MapFab's PNG path; NESfab converts it to CHR bytes and stores it
+// in PRG-ROM as PBZ so load_screen can copy it to CHR-RAM.
+
+ct U chr_#name#_index = _index
+
+data /pbz
+    [] chr_#name#
+        file(pbz, #"path"#)

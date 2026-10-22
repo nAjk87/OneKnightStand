@@ -1,0 +1,27 @@
+.DS_Store
+
+# Build outputs
+*.nes
+*.chr
+
+# Local tools / binaries
+*.exe
+/macfab/
+
+# Session history and downloaded reference packs
+/codex-history.jsonl
+*.zip
+/nessfx/
+
+# Music listening exports and unused NSF exports
+/lone_fighter/*.flac
+/lone_fighter/*.mp3
+/lone_fighter/*.nsf
+
+# Old map sources
+/yee.mapfab
+/tileset/yee.mapfab
+
+# Scratch art exports
+*-test.xcf
+*-effects.png
