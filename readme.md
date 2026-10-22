@@ -1,7 +1,7 @@
 # OneKnightStand
 <img width="700" alt="OneKnightStand multiplayer lobby" src="screenshot.png" />
 
-A local multiplayer NES ninja fighting game written in NESfab.
+A local multiplayer NES knight fighting game written in NESfab.
 
 ## Build
 
