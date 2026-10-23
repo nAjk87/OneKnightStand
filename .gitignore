@@ -7,9 +7,8 @@
 # Local tools / binaries
 *.exe
 /macfab/
-
+itch*
 # Session history and downloaded reference packs
-/codex-history.jsonl
 *.zip
 /nessfx/
 
