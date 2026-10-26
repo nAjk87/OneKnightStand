@@ -190,7 +190,8 @@ vars /game_vars
     U[NUM_PLAYERS] player_life_flash_timer = U[NUM_PLAYERS](0,0,0,0)
     Bool[NUM_PLAYERS] player_out = Bool[NUM_PLAYERS](false,false,false,false)
     Bool game_over = false
-    Bool on_title_screen = true
+    Bool on_loading_screen = true
+    Bool on_title_screen = false
     U winner_player = 255
     UU game_over_return_timer = 0
     U title_join_count = 0
@@ -428,8 +429,8 @@ nmi main_nmi()
 mode main()
 : nmi main_nmi
 
-    load_screen(@lev_title) // boot into the title level first
-    reset_match()
+    load_screen(@lev_loading)
+    hide_oam(0)
     // Tell the NES to trigger NMI once per frame:
     {PPUCTRL}(PPUCTRL_NMI_ON)
 
@@ -437,6 +438,15 @@ mode main()
     while true
         update_pads()
         spawn_rng_counter += 1
+
+        if on_loading_screen
+            if any_start_pressed()
+                on_loading_screen = false
+                return_to_title_screen()
+                update_sprites()
+            nmi
+            continue
+
         update_bg_attr_2_palette_anim()
         update_life_flash_timers()
         update_death_effects()

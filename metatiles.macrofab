@@ -1,4 +1,4 @@
-#:name:# 
+#:name:#
 #:chr_name:#
 #:palette_name:#
 
@@ -9,5 +9,5 @@ omni data /metatiles
         (_ne)       // North-east tiles of each metatile
         (_sw)       // South-west tiles of each metatile
         (_se)       // South-east tiles of each metatile
-        (_combined) // The collisions and attributes, OR'd together.
-    
+        (_attributes) // Palette attributes only; collision uses a separate runtime table.
+
