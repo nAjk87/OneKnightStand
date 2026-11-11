@@ -3,8 +3,6 @@
 mapfab(raw, "yee2.mapfab", "chr", "palette", "metatiles", "level")
 
 ct U NUM_PLAYERS = 4
-ct Bool PROFILE_FRAME_TIME = true
-ct U PROFILE_WALL_CONTACT_TINT = PPUMASK_GRAYSCALE
 
 ct UU player_char_width = 8
 ct UU player_char_height = 8
@@ -49,7 +47,7 @@ ct U COLL_BOTTOM_HALF = 32
 
 ct U katana_kill_min = 121
 ct U katana_kill_max = 124
-ct U KATANA_FOLLOWTHROUGH_FRAMES = 3
+ct U KATANA_FOLLOWTHROUGH_FRAMES = 5
 ct U[6] ground_brake_disable_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_A, BUTTON_A, BUTTON_SELECT)
 ct U[6] water_toggle_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_B, BUTTON_B, BUTTON_SELECT)
 ct U KATANA_RIGHT = 0
@@ -182,7 +180,6 @@ ct U SPRITE_ROW_COUNT = 30
 
 
 vars /game_vars
-    U profile_tint = 0
     CCC/levels lvl1_mt_map // Current screen's column-major metatile map
     CC/metatiles mt_nw
     CC/metatiles mt_ne
@@ -861,13 +858,6 @@ fn update_water_animation()
         flow_chr_frame += 1
         flow_chr_frame &= 7
 
-// Only change profiling color effects; keep rendering and left-edge visibility enabled.
-fn set_profile_tint(U tint)
-: +inline
-    if PROFILE_FRAME_TIME
-        profile_tint = tint
-        {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP | tint)
-
 nmi main_nmi()
     // Update OAM and poll the pads:
     ppu_upload_oam_poll_pads(0)
@@ -879,8 +869,8 @@ nmi main_nmi()
     upload_title_join_count()
     upload_title_stage_number()
 
-    // Preserve the profiling band if work continues across an NMI.
-    {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP | profile_tint)
+    // Turn on rendering.
+    {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP)
 
     // Reset the scroll https://www.nesdev.org/wiki/PPU_scrolling
     // and https://www.nesdev.org/wiki/Mirroring
@@ -1804,11 +1794,15 @@ fn draw_player(U p, U i) U
     U pcx = U(player_x[p] >> 4)
     U pcy = U(player_y[p] >> 4)
     U draw_x = pcx
-    U sprite_top = player_body_sprite_tiles[player_sprite[p]]
+    // Use the fixed idle pose in the air, including the takeoff frame.
+    U body_frame = player_sprite[p]
+    if !is_player_on_ground[p]
+        body_frame = 0
+    U sprite_top = player_body_sprite_tiles[body_frame]
     U player_attr = p + want_face[p]
 
     if katana_time[p] != 120
-        sprite_top = player_body_no_katana_sprite_tiles[player_sprite[p]]
+        sprite_top = player_body_no_katana_sprite_tiles[body_frame]
 
     if is_wall_sliding[p] && !is_player_on_ground[p]
         if katana_time[p] != 120
@@ -1881,26 +1875,19 @@ fn draw_player(U p, U i) U
             if want_face[p] == KATANA_LEFT
                 katana_attr += ATTR_H_FLIP
 
+        // Visual timing: 2 + 2 active frames, then 5 visual-only frames.
+        U visual_frame = 1
         if clash_flash_timer[p] > 0 && katana_time[p] <= 120
-            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
-                katana_tile = katana_vertical_sprite_tiles[0]
-            else
-                katana_tile = katana_horizontal_sprite_tiles[0]
-        else if katana_time[p] >= 124 || katana_followthrough_timer[p] > 0
-            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
-                katana_tile = katana_vertical_sprite_tiles[2]
-            else
-                katana_tile = katana_horizontal_sprite_tiles[2]
-        else if katana_time[p] >= 122
-            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
-                katana_tile = katana_vertical_sprite_tiles[1]
-            else
-                katana_tile = katana_horizontal_sprite_tiles[1]
+            visual_frame = 0
+        else if katana_followthrough_timer[p] > 0
+            visual_frame = 2
+        else if katana_time[p] <= 122
+            visual_frame = 0
+
+        if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
+            katana_tile = katana_vertical_sprite_tiles[visual_frame]
         else
-            if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
-                katana_tile = katana_vertical_sprite_tiles[0]
-            else
-                katana_tile = katana_horizontal_sprite_tiles[0]
+            katana_tile = katana_horizontal_sprite_tiles[visual_frame]
 
         reserve_sprite_row(katana_y, 1)
         set_oam(i, katana_x, katana_y, katana_tile, katana_attr)
@@ -2202,7 +2189,7 @@ fn normal_x_mov(U p)
     // --------------------------------
     // ANIMATION
     // --------------------------------
-    if  pads[p].held & BUTTON_LEFT || pads[p].held & BUTTON_RIGHT
+    if is_player_on_ground[p] && ((pads[p].held & BUTTON_LEFT) || (pads[p].held & BUTTON_RIGHT))
         player_sprite[p] = sprite_running_anim[anim_frame_index[p]]
         anim_timer[p] += 1
         if anim_timer[p] > 3
@@ -2392,9 +2379,7 @@ fn normal_y_mov(U p)
     Bool was_on_ground = is_player_on_ground[p]
     U wall_contact_dir = WALL_NONE
     if !is_player_on_ground[p]
-        set_profile_tint(PROFILE_WALL_CONTACT_TINT)
         wall_contact_dir = wall_slide_contact_dir(p)
-        set_profile_tint(0)
 
     U wall_dir = wall_contact_dir
 
@@ -2553,24 +2538,35 @@ fn apply_position_y_subpixel(U p, U wall_dir)
 
     // ---- TAK ----
     if y_moving_up[p] && new_py != old_py && !wrapped_y
-        UU wanted
-        wanted = old_py - new_py
+        UU wanted = old_py - new_py
+        UU allowed_py = old_py
+        Bool hit_ceiling = false
 
-        UU allowed = 0
-
-        for UU step = 1; step <= wanted; step += 1
-            UU test_y
-            test_y = old_py - step
-            if is_ceiling_at_pixel(p,test_y)
-                break
-            allowed += 1
-
-        if allowed < wanted
-            UU allowed_py
-            if old_py >= allowed
+        if wanted < 8
+            // Solids have 8px-aligned edges. Below 8px of movement, test the
+            // first pixel and only test the end if it enters another 8px band.
+            // The first test also preserves behavior when already overlapping.
+            hit_ceiling = is_ceiling_at_pixel(p, old_py - UU(1))
+            if !hit_ceiling
+                UU first_head_y = old_py + PLAYER_HEAD_OFFSET
+                UU final_head_y = new_py + PLAYER_HEAD_OFFSET + 1
+                if (first_head_y >> 3) != (final_head_y >> 3)
+                    if is_ceiling_at_pixel(p, new_py)
+                        hit_ceiling = true
+                        UU ceiling_bottom = ((final_head_y >> 3) + UU(1)) << 3
+                        allowed_py = ceiling_bottom - PLAYER_HEAD_OFFSET - UU(1)
+        else
+            // Keep the pixel sweep for unusually large knockback or future speeds.
+            UU allowed = 0
+            for UU step = 1; step <= wanted; step += 1
+                if is_ceiling_at_pixel(p, old_py - step)
+                    break
+                allowed += 1
+            if allowed < wanted
+                hit_ceiling = true
                 allowed_py = old_py - allowed
-            else
-                allowed_py = WORLD_HEIGHT_PIXELS - (allowed - old_py)
+
+        if hit_ceiling
             player_y[p] = allowed_py << 4
             player_y_vel[p] = 0
             y_moving_up[p] = false
@@ -2743,6 +2739,11 @@ fn wall_slide_contact_dir(U p) U
         return WALL_NONE
 
     U px_left = U(player_x[p] >> 4)
+    // Solid edges are on the 8px grid and X collision snaps us to that grid.
+    // Between grid boundaries, a non-overlapping player cannot touch a wall.
+    if px_left & 7
+        return WALL_NONE
+
     U py = U(player_y[p] >> 4) + U(7) // Same bottom contact point as before.
     if py >= 240
         py -= 240
@@ -2771,16 +2772,21 @@ fn is_corpse_ground_at_pixel(UU px_left, UU py) Bool
     return false
 
 fn is_ceiling_at_pixel(U p, UU py) Bool
-    UU head_y = py + PLAYER_HEAD_OFFSET +1
-
-    UU px_left  = player_x[p] >> 4
+    UU head_y = py + PLAYER_HEAD_OFFSET + 1
+    UU px_left = player_x[p] >> 4
     UU px_right = px_left + player_char_width - 1
 
-    if is_solid_at_pixel(px_left, head_y)
+    U flags = collision_flags_at_pixel(px_left, head_y)
+    if collision_flags_solid_at_pixel(flags, px_left, head_y)
         return true
-    if is_solid_at_pixel(px_right, head_y)
-        return true
-    return false
+
+    // Same Y: both head corners share flags when they occupy one metatile.
+    if (px_left >> 4) == (px_right >> 4)
+        if flags < COLL_LEFT_HALF
+            return false
+        return collision_flags_solid_at_pixel(flags, px_right, head_y)
+
+    return is_solid_at_pixel(px_right, head_y)
 
 
 fn player_katana_hits_another_player(U player, U target) Bool
