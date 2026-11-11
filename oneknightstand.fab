@@ -3,6 +3,8 @@
 mapfab(raw, "yee2.mapfab", "chr", "palette", "metatiles", "level")
 
 ct U NUM_PLAYERS = 4
+ct Bool PROFILE_FRAME_TIME = true
+ct U PROFILE_WALL_CONTACT_TINT = PPUMASK_GRAYSCALE
 
 ct UU player_char_width = 8
 ct UU player_char_height = 8
@@ -47,6 +49,9 @@ ct U COLL_BOTTOM_HALF = 32
 
 ct U katana_kill_min = 121
 ct U katana_kill_max = 124
+ct U KATANA_FOLLOWTHROUGH_FRAMES = 3
+ct U[6] ground_brake_disable_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_A, BUTTON_A, BUTTON_SELECT)
+ct U[6] water_toggle_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_B, BUTTON_B, BUTTON_SELECT)
 ct U KATANA_RIGHT = 0
 ct U KATANA_LEFT = 64
 ct U KATANA_UP = 1
@@ -85,8 +90,6 @@ ct U RESPAWN_FRAMES = 120
 ct UU WIN_RETURN_FRAMES = 300
 ct U STARTING_LIVES = 5
 ct U NO_WINNER = 255
-ct U SPRITE_PALETTE_START = 12
-ct U KILL_FLASH_COLOR = $30
 ct U BG_ATTR_2_COLOR_2 = 7
 ct U BG_ATTR_2_COLOR_3 = 8
 ct U BG_ATTR_2_ANIM_FRAMES = 12
@@ -111,8 +114,18 @@ ct U PLAYER_IDLE_NO_KATANA_HEAD_TILE = 99
 ct U PLAYER_RUN_1_NO_KATANA_HEAD_TILE = 100
 ct U PLAYER_RUN_2_NO_KATANA_HEAD_TILE = 101
 ct U PLAYER_WALL_SLIDE_NO_KATANA_HEAD_TILE = 113
+ct U PLAYER_ATTACK_TILE = 116 // PNG x32, y56 (8x8 tile in a 128px-wide sheet).
 
 ct U CORPSE_LEFT_TILE = 114
+ct U CORPSE_FLASH_TILE = 117
+ct U WATER_PIPE_FRAME_BASE = 0
+ct U WATER_WIDE_FRAME_BASE = 8
+ct U WATER_NARROW_TOP_FRAME_BASE = 16
+ct U WATER_NARROW_BODY_FRAME_BASE = 24
+ct U WATER_FLOW_FRAME_BASE = 32
+ct U WATER_CORNER_FRAME_BASE = 40
+ct U WATER_OUTLET_X = 212
+ct U WATER_OUTLET_Y = 119 // OAM Y is one pixel above the visible top.
 
 
 ct U KATANA_HORIZONTAL_START_TILE = 224
@@ -169,6 +182,7 @@ ct U SPRITE_ROW_COUNT = 30
 
 
 vars /game_vars
+    U profile_tint = 0
     CCC/levels lvl1_mt_map // Current screen's column-major metatile map
     CC/metatiles mt_nw
     CC/metatiles mt_ne
@@ -181,6 +195,7 @@ vars /game_vars
     U[NUM_PLAYERS] want_face   = U[NUM_PLAYERS](0,0,0,0)
 
     U[NUM_PLAYERS] katana_time = U[NUM_PLAYERS](120,120,120,120)
+    U[NUM_PLAYERS] katana_followthrough_timer = U[NUM_PLAYERS](0,0,0,0)
     U[NUM_PLAYERS] katana_dir = U[NUM_PLAYERS](0,0,0,0)
     U[NUM_PLAYERS] clash_flash_timer = U[NUM_PLAYERS](0,0,0,0)
     U[NUM_PLAYERS] clash_flash_dir = U[NUM_PLAYERS](0,0,0,0)
@@ -200,6 +215,25 @@ vars /game_vars
     Bool title_join_dirty = true
     U title_selected_stage = 1
     Bool title_stage_dirty = true
+    U flow_chr_timer = 0
+    U flow_chr_frame = 0
+    U wide_chr_frame = 0
+    U narrow_chr_frame = 0
+    U[16] flow_chr_pixels
+    U[16] flow_base_pixels
+    U[8] flow_base_mask
+    U[16] flow_end_pixels
+    U[8] flow_end_mask
+    U water_chr_timer = 0
+    U narrow_water_chr_timer = 0
+    U[16] water_chr_pixels
+    U[16] narrow_top_pixels
+    U[8] narrow_top_mask
+    U[16] narrow_body_pixels
+    U[8] narrow_body_mask
+    U[16] outlet_chr_pixels
+    U[16] pipe_chr_pixels
+    U[8] pipe_chr_mask
     Bool palette_dirty = false
     U[25] base_palette
     U bg_attr_2_anim_timer = 0
@@ -207,6 +241,10 @@ vars /game_vars
     U spawn_rng_counter = 0
     U spawn_random_offset = 0
     U hitstop_timer = 0
+    Bool water_enabled = false
+    U water_code_step = 0
+    Bool ground_attack_brake_enabled = true
+    U ground_brake_code_step = 0
 
     UU[TOTAL_DEATH_PARTICLES] death_particle_x
     UU[TOTAL_DEATH_PARTICLES] death_particle_y
@@ -286,7 +324,10 @@ fn load_screen(CCC/levels my_lvl_pointer)
     {PPUCTRL}(0)
     ppu_reset_addr($0000)
     ppu_upload_pbz.tiles(@chr_chr, 0)
+    ppu_reset_addr($1000)
+    ppu_upload_pbz.tiles(@chr_chr, 0)
     state(M30_CHR(chr_bank))
+    load_water_chr_tile()
 
     // set palette
     load_palette(pal)
@@ -408,6 +449,425 @@ fn upload_title_stage_number()
     {PPUDATA}(TITLE_STAGE_TILE_1 + title_selected_stage - U(1))
 
 
+// Cache the water patterns and silhouettes while rendering is disabled.
+fn load_water_chr_tile()
+    water_chr_timer = 0
+    narrow_water_chr_timer = 0
+    ppu_reset_addr($0E60)
+    {PPUDATA}() // Discard the PPU read buffer before reading CHR.
+    water_chr_pixels[0] = {PPUDATA}()
+    water_chr_pixels[1] = {PPUDATA}()
+    water_chr_pixels[2] = {PPUDATA}()
+    water_chr_pixels[3] = {PPUDATA}()
+    water_chr_pixels[4] = {PPUDATA}()
+    water_chr_pixels[5] = {PPUDATA}()
+    water_chr_pixels[6] = {PPUDATA}()
+    water_chr_pixels[7] = {PPUDATA}()
+    water_chr_pixels[8] = {PPUDATA}()
+    water_chr_pixels[9] = {PPUDATA}()
+    water_chr_pixels[10] = {PPUDATA}()
+    water_chr_pixels[11] = {PPUDATA}()
+    water_chr_pixels[12] = {PPUDATA}()
+    water_chr_pixels[13] = {PPUDATA}()
+    water_chr_pixels[14] = {PPUDATA}()
+    water_chr_pixels[15] = {PPUDATA}()
+
+    narrow_top_pixels[0] = water_chr_pixels[0]
+    narrow_top_pixels[1] = water_chr_pixels[1]
+    narrow_top_pixels[2] = water_chr_pixels[2]
+    narrow_top_pixels[3] = water_chr_pixels[3]
+    narrow_top_pixels[4] = water_chr_pixels[4]
+    narrow_top_pixels[5] = water_chr_pixels[5]
+    narrow_top_pixels[6] = water_chr_pixels[6]
+    narrow_top_pixels[7] = water_chr_pixels[7]
+    narrow_top_pixels[8] = water_chr_pixels[8]
+    narrow_top_pixels[9] = water_chr_pixels[9]
+    narrow_top_pixels[10] = water_chr_pixels[10]
+    narrow_top_pixels[11] = water_chr_pixels[11]
+    narrow_top_pixels[12] = water_chr_pixels[12]
+    narrow_top_pixels[13] = water_chr_pixels[13]
+    narrow_top_pixels[14] = water_chr_pixels[14]
+    narrow_top_pixels[15] = water_chr_pixels[15]
+    ppu_reset_addr($0E70) // Tile 231: the lower waterfall body.
+    {PPUDATA}()
+    narrow_body_pixels[0] = {PPUDATA}()
+    narrow_body_pixels[1] = {PPUDATA}()
+    narrow_body_pixels[2] = {PPUDATA}()
+    narrow_body_pixels[3] = {PPUDATA}()
+    narrow_body_pixels[4] = {PPUDATA}()
+    narrow_body_pixels[5] = {PPUDATA}()
+    narrow_body_pixels[6] = {PPUDATA}()
+    narrow_body_pixels[7] = {PPUDATA}()
+    narrow_body_pixels[8] = {PPUDATA}()
+    narrow_body_pixels[9] = {PPUDATA}()
+    narrow_body_pixels[10] = {PPUDATA}()
+    narrow_body_pixels[11] = {PPUDATA}()
+    narrow_body_pixels[12] = {PPUDATA}()
+    narrow_body_pixels[13] = {PPUDATA}()
+    narrow_body_pixels[14] = {PPUDATA}()
+    narrow_body_pixels[15] = {PPUDATA}()
+    narrow_top_mask[0] = narrow_top_pixels[0] | narrow_top_pixels[8]
+    narrow_top_mask[1] = narrow_top_pixels[1] | narrow_top_pixels[9]
+    narrow_top_mask[2] = narrow_top_pixels[2] | narrow_top_pixels[10]
+    narrow_top_mask[3] = narrow_top_pixels[3] | narrow_top_pixels[11]
+    narrow_top_mask[4] = narrow_top_pixels[4] | narrow_top_pixels[12]
+    narrow_top_mask[5] = narrow_top_pixels[5] | narrow_top_pixels[13]
+    narrow_top_mask[6] = narrow_top_pixels[6] | narrow_top_pixels[14]
+    narrow_top_mask[7] = narrow_top_pixels[7] | narrow_top_pixels[15]
+    narrow_body_mask[0] = narrow_body_pixels[0] | narrow_body_pixels[8]
+    narrow_body_mask[1] = narrow_body_pixels[1] | narrow_body_pixels[9]
+    narrow_body_mask[2] = narrow_body_pixels[2] | narrow_body_pixels[10]
+    narrow_body_mask[3] = narrow_body_pixels[3] | narrow_body_pixels[11]
+    narrow_body_mask[4] = narrow_body_pixels[4] | narrow_body_pixels[12]
+    narrow_body_mask[5] = narrow_body_pixels[5] | narrow_body_pixels[13]
+    narrow_body_mask[6] = narrow_body_pixels[6] | narrow_body_pixels[14]
+    narrow_body_mask[7] = narrow_body_pixels[7] | narrow_body_pixels[15]
+
+    ppu_reset_addr($0A20) // Tile 162.
+    {PPUDATA}()
+    outlet_chr_pixels[0] = {PPUDATA}()
+    outlet_chr_pixels[1] = {PPUDATA}()
+    outlet_chr_pixels[2] = {PPUDATA}()
+    outlet_chr_pixels[3] = {PPUDATA}()
+    outlet_chr_pixels[4] = {PPUDATA}()
+    outlet_chr_pixels[5] = {PPUDATA}()
+    outlet_chr_pixels[6] = {PPUDATA}()
+    outlet_chr_pixels[7] = {PPUDATA}()
+    outlet_chr_pixels[8] = {PPUDATA}()
+    outlet_chr_pixels[9] = {PPUDATA}()
+    outlet_chr_pixels[10] = {PPUDATA}()
+    outlet_chr_pixels[11] = {PPUDATA}()
+    outlet_chr_pixels[12] = {PPUDATA}()
+    outlet_chr_pixels[13] = {PPUDATA}()
+    outlet_chr_pixels[14] = {PPUDATA}()
+    outlet_chr_pixels[15] = {PPUDATA}()
+
+    ppu_reset_addr($0A00) // Preserve the shape and base colors of tile 160.
+    {PPUDATA}()
+    pipe_chr_pixels[0] = {PPUDATA}()
+    pipe_chr_pixels[1] = {PPUDATA}()
+    pipe_chr_pixels[2] = {PPUDATA}()
+    pipe_chr_pixels[3] = {PPUDATA}()
+    pipe_chr_pixels[4] = {PPUDATA}()
+    pipe_chr_pixels[5] = {PPUDATA}()
+    pipe_chr_pixels[6] = {PPUDATA}()
+    pipe_chr_pixels[7] = {PPUDATA}()
+    pipe_chr_pixels[8] = {PPUDATA}()
+    pipe_chr_pixels[9] = {PPUDATA}()
+    pipe_chr_pixels[10] = {PPUDATA}()
+    pipe_chr_pixels[11] = {PPUDATA}()
+    pipe_chr_pixels[12] = {PPUDATA}()
+    pipe_chr_pixels[13] = {PPUDATA}()
+    pipe_chr_pixels[14] = {PPUDATA}()
+    pipe_chr_pixels[15] = {PPUDATA}()
+    pipe_chr_mask[0] = pipe_chr_pixels[0] | pipe_chr_pixels[8]
+    pipe_chr_mask[1] = pipe_chr_pixels[1] | pipe_chr_pixels[9]
+    pipe_chr_mask[2] = pipe_chr_pixels[2] | pipe_chr_pixels[10]
+    pipe_chr_mask[3] = pipe_chr_pixels[3] | pipe_chr_pixels[11]
+    pipe_chr_mask[4] = pipe_chr_pixels[4] | pipe_chr_pixels[12]
+    pipe_chr_mask[5] = pipe_chr_pixels[5] | pipe_chr_pixels[13]
+    pipe_chr_mask[6] = pipe_chr_pixels[6] | pipe_chr_pixels[14]
+    pipe_chr_mask[7] = pipe_chr_pixels[7] | pipe_chr_pixels[15]
+
+    flow_chr_timer = 0
+    ppu_reset_addr($0E90) // Tile 233: horizontal water pattern.
+    {PPUDATA}()
+    flow_chr_pixels[0] = {PPUDATA}()
+    flow_chr_pixels[1] = {PPUDATA}()
+    flow_chr_pixels[2] = {PPUDATA}()
+    flow_chr_pixels[3] = {PPUDATA}()
+    flow_chr_pixels[4] = {PPUDATA}()
+    flow_chr_pixels[5] = {PPUDATA}()
+    flow_chr_pixels[6] = {PPUDATA}()
+    flow_chr_pixels[7] = {PPUDATA}()
+    flow_chr_pixels[8] = {PPUDATA}()
+    flow_chr_pixels[9] = {PPUDATA}()
+    flow_chr_pixels[10] = {PPUDATA}()
+    flow_chr_pixels[11] = {PPUDATA}()
+    flow_chr_pixels[12] = {PPUDATA}()
+    flow_chr_pixels[13] = {PPUDATA}()
+    flow_chr_pixels[14] = {PPUDATA}()
+    flow_chr_pixels[15] = {PPUDATA}()
+    ppu_reset_addr($0E90)
+    {PPUDATA}()
+    flow_base_pixels[0] = {PPUDATA}()
+    flow_base_pixels[1] = {PPUDATA}()
+    flow_base_pixels[2] = {PPUDATA}()
+    flow_base_pixels[3] = {PPUDATA}()
+    flow_base_pixels[4] = {PPUDATA}()
+    flow_base_pixels[5] = {PPUDATA}()
+    flow_base_pixels[6] = {PPUDATA}()
+    flow_base_pixels[7] = {PPUDATA}()
+    flow_base_pixels[8] = {PPUDATA}()
+    flow_base_pixels[9] = {PPUDATA}()
+    flow_base_pixels[10] = {PPUDATA}()
+    flow_base_pixels[11] = {PPUDATA}()
+    flow_base_pixels[12] = {PPUDATA}()
+    flow_base_pixels[13] = {PPUDATA}()
+    flow_base_pixels[14] = {PPUDATA}()
+    flow_base_pixels[15] = {PPUDATA}()
+    ppu_reset_addr($0E80)
+    {PPUDATA}()
+    flow_end_pixels[0] = {PPUDATA}()
+    flow_end_pixels[1] = {PPUDATA}()
+    flow_end_pixels[2] = {PPUDATA}()
+    flow_end_pixels[3] = {PPUDATA}()
+    flow_end_pixels[4] = {PPUDATA}()
+    flow_end_pixels[5] = {PPUDATA}()
+    flow_end_pixels[6] = {PPUDATA}()
+    flow_end_pixels[7] = {PPUDATA}()
+    flow_end_pixels[8] = {PPUDATA}()
+    flow_end_pixels[9] = {PPUDATA}()
+    flow_end_pixels[10] = {PPUDATA}()
+    flow_end_pixels[11] = {PPUDATA}()
+    flow_end_pixels[12] = {PPUDATA}()
+    flow_end_pixels[13] = {PPUDATA}()
+    flow_end_pixels[14] = {PPUDATA}()
+    flow_end_pixels[15] = {PPUDATA}()
+    flow_base_mask[0] = flow_base_pixels[0] | flow_base_pixels[8]
+    flow_base_mask[1] = flow_base_pixels[1] | flow_base_pixels[9]
+    flow_base_mask[2] = flow_base_pixels[2] | flow_base_pixels[10]
+    flow_base_mask[3] = flow_base_pixels[3] | flow_base_pixels[11]
+    flow_base_mask[4] = flow_base_pixels[4] | flow_base_pixels[12]
+    flow_base_mask[5] = flow_base_pixels[5] | flow_base_pixels[13]
+    flow_base_mask[6] = flow_base_pixels[6] | flow_base_pixels[14]
+    flow_base_mask[7] = flow_base_pixels[7] | flow_base_pixels[15]
+    flow_end_mask[0] = flow_end_pixels[0] | flow_end_pixels[8]
+    flow_end_mask[1] = flow_end_pixels[1] | flow_end_pixels[9]
+    flow_end_mask[2] = flow_end_pixels[2] | flow_end_pixels[10]
+    flow_end_mask[3] = flow_end_pixels[3] | flow_end_pixels[11]
+    flow_end_mask[4] = flow_end_pixels[4] | flow_end_pixels[12]
+    flow_end_mask[5] = flow_end_pixels[5] | flow_end_pixels[13]
+    flow_end_mask[6] = flow_end_pixels[6] | flow_end_pixels[14]
+    flow_end_mask[7] = flow_end_pixels[7] | flow_end_pixels[15]
+
+    flow_chr_frame = 0
+    wide_chr_frame = 0
+    narrow_chr_frame = 0
+    prepare_water_chr_frames()
+
+// Sprite slots 0..47 in the second pattern table are unused by other sprites.
+// Prepare all pixels at screen load; gameplay only selects cached tile numbers.
+fn prepare_water_chr_frames()
+    for U phase = 0; phase < 8; phase += 1
+        U frame_offset = phase << 4
+        U narrow_row_0 = (water_chr_pixels[0] | water_chr_pixels[8]) ^ U(255)
+        U narrow_row_1 = (water_chr_pixels[1] | water_chr_pixels[9]) ^ U(255)
+        U narrow_row_2 = (water_chr_pixels[2] | water_chr_pixels[10]) ^ U(255)
+        U narrow_row_3 = (water_chr_pixels[3] | water_chr_pixels[11]) ^ U(255)
+        U narrow_row_4 = (water_chr_pixels[4] | water_chr_pixels[12]) ^ U(255)
+        U narrow_row_5 = (water_chr_pixels[5] | water_chr_pixels[13]) ^ U(255)
+        U narrow_row_6 = (water_chr_pixels[6] | water_chr_pixels[14]) ^ U(255)
+        U narrow_row_7 = (water_chr_pixels[7] | water_chr_pixels[15]) ^ U(255)
+        U pipe_row_0 = (outlet_chr_pixels[0] | outlet_chr_pixels[8]) ^ U(255)
+        U pipe_row_1 = (outlet_chr_pixels[1] | outlet_chr_pixels[9]) ^ U(255)
+        U pipe_row_2 = (outlet_chr_pixels[2] | outlet_chr_pixels[10]) ^ U(255)
+        U pipe_row_3 = (outlet_chr_pixels[3] | outlet_chr_pixels[11]) ^ U(255)
+        U pipe_row_4 = (outlet_chr_pixels[4] | outlet_chr_pixels[12]) ^ U(255)
+        U pipe_row_5 = (outlet_chr_pixels[5] | outlet_chr_pixels[13]) ^ U(255)
+        U pipe_row_6 = (outlet_chr_pixels[6] | outlet_chr_pixels[14]) ^ U(255)
+        U pipe_row_7 = (outlet_chr_pixels[7] | outlet_chr_pixels[15]) ^ U(255)
+        U flow_row_0 = (flow_chr_pixels[0] | flow_chr_pixels[8]) ^ U(255)
+        U flow_row_1 = (flow_chr_pixels[1] | flow_chr_pixels[9]) ^ U(255)
+        U flow_row_2 = (flow_chr_pixels[2] | flow_chr_pixels[10]) ^ U(255)
+        U flow_row_3 = (flow_chr_pixels[3] | flow_chr_pixels[11]) ^ U(255)
+        U flow_row_4 = (flow_chr_pixels[4] | flow_chr_pixels[12]) ^ U(255)
+        U flow_row_5 = (flow_chr_pixels[5] | flow_chr_pixels[13]) ^ U(255)
+        U flow_row_6 = (flow_chr_pixels[6] | flow_chr_pixels[14]) ^ U(255)
+        U flow_row_7 = (flow_chr_pixels[7] | flow_chr_pixels[15]) ^ U(255)
+
+        ppu_reset_addr(UU($1000) + UU(frame_offset))
+        {PPUDATA}((outlet_chr_pixels[0] & pipe_chr_mask[0]) | (pipe_chr_pixels[0] & pipe_row_0))
+        {PPUDATA}((outlet_chr_pixels[1] & pipe_chr_mask[1]) | (pipe_chr_pixels[1] & pipe_row_1))
+        {PPUDATA}((outlet_chr_pixels[2] & pipe_chr_mask[2]) | (pipe_chr_pixels[2] & pipe_row_2))
+        {PPUDATA}((outlet_chr_pixels[3] & pipe_chr_mask[3]) | (pipe_chr_pixels[3] & pipe_row_3))
+        {PPUDATA}((outlet_chr_pixels[4] & pipe_chr_mask[4]) | (pipe_chr_pixels[4] & pipe_row_4))
+        {PPUDATA}((outlet_chr_pixels[5] & pipe_chr_mask[5]) | (pipe_chr_pixels[5] & pipe_row_5))
+        {PPUDATA}((outlet_chr_pixels[6] & pipe_chr_mask[6]) | (pipe_chr_pixels[6] & pipe_row_6))
+        {PPUDATA}((outlet_chr_pixels[7] & pipe_chr_mask[7]) | (pipe_chr_pixels[7] & pipe_row_7))
+        {PPUDATA}((outlet_chr_pixels[8] & pipe_chr_mask[0]) | (pipe_chr_pixels[8] & pipe_row_0))
+        {PPUDATA}((outlet_chr_pixels[9] & pipe_chr_mask[1]) | (pipe_chr_pixels[9] & pipe_row_1))
+        {PPUDATA}((outlet_chr_pixels[10] & pipe_chr_mask[2]) | (pipe_chr_pixels[10] & pipe_row_2))
+        {PPUDATA}((outlet_chr_pixels[11] & pipe_chr_mask[3]) | (pipe_chr_pixels[11] & pipe_row_3))
+        {PPUDATA}((outlet_chr_pixels[12] & pipe_chr_mask[4]) | (pipe_chr_pixels[12] & pipe_row_4))
+        {PPUDATA}((outlet_chr_pixels[13] & pipe_chr_mask[5]) | (pipe_chr_pixels[13] & pipe_row_5))
+        {PPUDATA}((outlet_chr_pixels[14] & pipe_chr_mask[6]) | (pipe_chr_pixels[14] & pipe_row_6))
+        {PPUDATA}((outlet_chr_pixels[15] & pipe_chr_mask[7]) | (pipe_chr_pixels[15] & pipe_row_7))
+
+        ppu_reset_addr(UU($1080) + UU(frame_offset))
+        {PPUDATA}(outlet_chr_pixels[0])
+        {PPUDATA}(outlet_chr_pixels[1])
+        {PPUDATA}(outlet_chr_pixels[2])
+        {PPUDATA}(outlet_chr_pixels[3])
+        {PPUDATA}(outlet_chr_pixels[4])
+        {PPUDATA}(outlet_chr_pixels[5])
+        {PPUDATA}(outlet_chr_pixels[6])
+        {PPUDATA}(outlet_chr_pixels[7])
+        {PPUDATA}(outlet_chr_pixels[8])
+        {PPUDATA}(outlet_chr_pixels[9])
+        {PPUDATA}(outlet_chr_pixels[10])
+        {PPUDATA}(outlet_chr_pixels[11])
+        {PPUDATA}(outlet_chr_pixels[12])
+        {PPUDATA}(outlet_chr_pixels[13])
+        {PPUDATA}(outlet_chr_pixels[14])
+        {PPUDATA}(outlet_chr_pixels[15])
+
+        ppu_reset_addr(UU($1100) + UU(frame_offset))
+        {PPUDATA}((water_chr_pixels[0] & narrow_top_mask[0]) | (narrow_top_pixels[0] & narrow_row_0))
+        {PPUDATA}((water_chr_pixels[1] & narrow_top_mask[1]) | (narrow_top_pixels[1] & narrow_row_1))
+        {PPUDATA}((water_chr_pixels[2] & narrow_top_mask[2]) | (narrow_top_pixels[2] & narrow_row_2))
+        {PPUDATA}((water_chr_pixels[3] & narrow_top_mask[3]) | (narrow_top_pixels[3] & narrow_row_3))
+        {PPUDATA}((water_chr_pixels[4] & narrow_top_mask[4]) | (narrow_top_pixels[4] & narrow_row_4))
+        {PPUDATA}((water_chr_pixels[5] & narrow_top_mask[5]) | (narrow_top_pixels[5] & narrow_row_5))
+        {PPUDATA}((water_chr_pixels[6] & narrow_top_mask[6]) | (narrow_top_pixels[6] & narrow_row_6))
+        {PPUDATA}((water_chr_pixels[7] & narrow_top_mask[7]) | (narrow_top_pixels[7] & narrow_row_7))
+        {PPUDATA}((water_chr_pixels[8] & narrow_top_mask[0]) | (narrow_top_pixels[8] & narrow_row_0))
+        {PPUDATA}((water_chr_pixels[9] & narrow_top_mask[1]) | (narrow_top_pixels[9] & narrow_row_1))
+        {PPUDATA}((water_chr_pixels[10] & narrow_top_mask[2]) | (narrow_top_pixels[10] & narrow_row_2))
+        {PPUDATA}((water_chr_pixels[11] & narrow_top_mask[3]) | (narrow_top_pixels[11] & narrow_row_3))
+        {PPUDATA}((water_chr_pixels[12] & narrow_top_mask[4]) | (narrow_top_pixels[12] & narrow_row_4))
+        {PPUDATA}((water_chr_pixels[13] & narrow_top_mask[5]) | (narrow_top_pixels[13] & narrow_row_5))
+        {PPUDATA}((water_chr_pixels[14] & narrow_top_mask[6]) | (narrow_top_pixels[14] & narrow_row_6))
+        {PPUDATA}((water_chr_pixels[15] & narrow_top_mask[7]) | (narrow_top_pixels[15] & narrow_row_7))
+
+        ppu_reset_addr(UU($1180) + UU(frame_offset))
+        {PPUDATA}((water_chr_pixels[0] & narrow_body_mask[0]) | (narrow_body_pixels[0] & narrow_row_0))
+        {PPUDATA}((water_chr_pixels[1] & narrow_body_mask[1]) | (narrow_body_pixels[1] & narrow_row_1))
+        {PPUDATA}((water_chr_pixels[2] & narrow_body_mask[2]) | (narrow_body_pixels[2] & narrow_row_2))
+        {PPUDATA}((water_chr_pixels[3] & narrow_body_mask[3]) | (narrow_body_pixels[3] & narrow_row_3))
+        {PPUDATA}((water_chr_pixels[4] & narrow_body_mask[4]) | (narrow_body_pixels[4] & narrow_row_4))
+        {PPUDATA}((water_chr_pixels[5] & narrow_body_mask[5]) | (narrow_body_pixels[5] & narrow_row_5))
+        {PPUDATA}((water_chr_pixels[6] & narrow_body_mask[6]) | (narrow_body_pixels[6] & narrow_row_6))
+        {PPUDATA}((water_chr_pixels[7] & narrow_body_mask[7]) | (narrow_body_pixels[7] & narrow_row_7))
+        {PPUDATA}((water_chr_pixels[8] & narrow_body_mask[0]) | (narrow_body_pixels[8] & narrow_row_0))
+        {PPUDATA}((water_chr_pixels[9] & narrow_body_mask[1]) | (narrow_body_pixels[9] & narrow_row_1))
+        {PPUDATA}((water_chr_pixels[10] & narrow_body_mask[2]) | (narrow_body_pixels[10] & narrow_row_2))
+        {PPUDATA}((water_chr_pixels[11] & narrow_body_mask[3]) | (narrow_body_pixels[11] & narrow_row_3))
+        {PPUDATA}((water_chr_pixels[12] & narrow_body_mask[4]) | (narrow_body_pixels[12] & narrow_row_4))
+        {PPUDATA}((water_chr_pixels[13] & narrow_body_mask[5]) | (narrow_body_pixels[13] & narrow_row_5))
+        {PPUDATA}((water_chr_pixels[14] & narrow_body_mask[6]) | (narrow_body_pixels[14] & narrow_row_6))
+        {PPUDATA}((water_chr_pixels[15] & narrow_body_mask[7]) | (narrow_body_pixels[15] & narrow_row_7))
+
+        ppu_reset_addr(UU($1200) + UU(frame_offset))
+        {PPUDATA}((flow_chr_pixels[0] & flow_base_mask[0]) | (flow_base_pixels[0] & flow_row_0))
+        {PPUDATA}((flow_chr_pixels[1] & flow_base_mask[1]) | (flow_base_pixels[1] & flow_row_1))
+        {PPUDATA}((flow_chr_pixels[2] & flow_base_mask[2]) | (flow_base_pixels[2] & flow_row_2))
+        {PPUDATA}((flow_chr_pixels[3] & flow_base_mask[3]) | (flow_base_pixels[3] & flow_row_3))
+        {PPUDATA}((flow_chr_pixels[4] & flow_base_mask[4]) | (flow_base_pixels[4] & flow_row_4))
+        {PPUDATA}((flow_chr_pixels[5] & flow_base_mask[5]) | (flow_base_pixels[5] & flow_row_5))
+        {PPUDATA}((flow_chr_pixels[6] & flow_base_mask[6]) | (flow_base_pixels[6] & flow_row_6))
+        {PPUDATA}((flow_chr_pixels[7] & flow_base_mask[7]) | (flow_base_pixels[7] & flow_row_7))
+        {PPUDATA}((flow_chr_pixels[8] & flow_base_mask[0]) | (flow_base_pixels[8] & flow_row_0))
+        {PPUDATA}((flow_chr_pixels[9] & flow_base_mask[1]) | (flow_base_pixels[9] & flow_row_1))
+        {PPUDATA}((flow_chr_pixels[10] & flow_base_mask[2]) | (flow_base_pixels[10] & flow_row_2))
+        {PPUDATA}((flow_chr_pixels[11] & flow_base_mask[3]) | (flow_base_pixels[11] & flow_row_3))
+        {PPUDATA}((flow_chr_pixels[12] & flow_base_mask[4]) | (flow_base_pixels[12] & flow_row_4))
+        {PPUDATA}((flow_chr_pixels[13] & flow_base_mask[5]) | (flow_base_pixels[13] & flow_row_5))
+        {PPUDATA}((flow_chr_pixels[14] & flow_base_mask[6]) | (flow_base_pixels[14] & flow_row_6))
+        {PPUDATA}((flow_chr_pixels[15] & flow_base_mask[7]) | (flow_base_pixels[15] & flow_row_7))
+
+        ppu_reset_addr(UU($1280) + UU(frame_offset))
+        {PPUDATA}((flow_chr_pixels[0] & flow_end_mask[0]) | (flow_end_pixels[0] & flow_row_0))
+        {PPUDATA}((flow_chr_pixels[1] & flow_end_mask[1]) | (flow_end_pixels[1] & flow_row_1))
+        {PPUDATA}((flow_chr_pixels[2] & flow_end_mask[2]) | (flow_end_pixels[2] & flow_row_2))
+        {PPUDATA}((flow_chr_pixels[3] & flow_end_mask[3]) | (flow_end_pixels[3] & flow_row_3))
+        {PPUDATA}((flow_chr_pixels[4] & flow_end_mask[4]) | (flow_end_pixels[4] & flow_row_4))
+        {PPUDATA}((flow_chr_pixels[5] & flow_end_mask[5]) | (flow_end_pixels[5] & flow_row_5))
+        {PPUDATA}((flow_chr_pixels[6] & flow_end_mask[6]) | (flow_end_pixels[6] & flow_row_6))
+        {PPUDATA}((flow_chr_pixels[7] & flow_end_mask[7]) | (flow_end_pixels[7] & flow_row_7))
+        {PPUDATA}((flow_chr_pixels[8] & flow_end_mask[0]) | (flow_end_pixels[8] & flow_row_0))
+        {PPUDATA}((flow_chr_pixels[9] & flow_end_mask[1]) | (flow_end_pixels[9] & flow_row_1))
+        {PPUDATA}((flow_chr_pixels[10] & flow_end_mask[2]) | (flow_end_pixels[10] & flow_row_2))
+        {PPUDATA}((flow_chr_pixels[11] & flow_end_mask[3]) | (flow_end_pixels[11] & flow_row_3))
+        {PPUDATA}((flow_chr_pixels[12] & flow_end_mask[4]) | (flow_end_pixels[12] & flow_row_4))
+        {PPUDATA}((flow_chr_pixels[13] & flow_end_mask[5]) | (flow_end_pixels[13] & flow_row_5))
+        {PPUDATA}((flow_chr_pixels[14] & flow_end_mask[6]) | (flow_end_pixels[14] & flow_row_6))
+        {PPUDATA}((flow_chr_pixels[15] & flow_end_mask[7]) | (flow_end_pixels[15] & flow_row_7))
+
+        U last_low = water_chr_pixels[7]
+        U last_high = water_chr_pixels[15]
+        water_chr_pixels[7] = water_chr_pixels[6]
+        water_chr_pixels[6] = water_chr_pixels[5]
+        water_chr_pixels[5] = water_chr_pixels[4]
+        water_chr_pixels[4] = water_chr_pixels[3]
+        water_chr_pixels[3] = water_chr_pixels[2]
+        water_chr_pixels[2] = water_chr_pixels[1]
+        water_chr_pixels[1] = water_chr_pixels[0]
+        water_chr_pixels[0] = last_low
+        water_chr_pixels[15] = water_chr_pixels[14]
+        water_chr_pixels[14] = water_chr_pixels[13]
+        water_chr_pixels[13] = water_chr_pixels[12]
+        water_chr_pixels[12] = water_chr_pixels[11]
+        water_chr_pixels[11] = water_chr_pixels[10]
+        water_chr_pixels[10] = water_chr_pixels[9]
+        water_chr_pixels[9] = water_chr_pixels[8]
+        water_chr_pixels[8] = last_high
+
+        U outlet_last_low = outlet_chr_pixels[7]
+        U outlet_last_high = outlet_chr_pixels[15]
+        outlet_chr_pixels[7] = outlet_chr_pixels[6]
+        outlet_chr_pixels[6] = outlet_chr_pixels[5]
+        outlet_chr_pixels[5] = outlet_chr_pixels[4]
+        outlet_chr_pixels[4] = outlet_chr_pixels[3]
+        outlet_chr_pixels[3] = outlet_chr_pixels[2]
+        outlet_chr_pixels[2] = outlet_chr_pixels[1]
+        outlet_chr_pixels[1] = outlet_chr_pixels[0]
+        outlet_chr_pixels[0] = outlet_last_low
+        outlet_chr_pixels[15] = outlet_chr_pixels[14]
+        outlet_chr_pixels[14] = outlet_chr_pixels[13]
+        outlet_chr_pixels[13] = outlet_chr_pixels[12]
+        outlet_chr_pixels[12] = outlet_chr_pixels[11]
+        outlet_chr_pixels[11] = outlet_chr_pixels[10]
+        outlet_chr_pixels[10] = outlet_chr_pixels[9]
+        outlet_chr_pixels[9] = outlet_chr_pixels[8]
+        outlet_chr_pixels[8] = outlet_last_high
+
+        flow_chr_pixels[0] = (flow_chr_pixels[0] << 1) | (flow_chr_pixels[0] >> 7)
+        flow_chr_pixels[1] = (flow_chr_pixels[1] << 1) | (flow_chr_pixels[1] >> 7)
+        flow_chr_pixels[2] = (flow_chr_pixels[2] << 1) | (flow_chr_pixels[2] >> 7)
+        flow_chr_pixels[3] = (flow_chr_pixels[3] << 1) | (flow_chr_pixels[3] >> 7)
+        flow_chr_pixels[4] = (flow_chr_pixels[4] << 1) | (flow_chr_pixels[4] >> 7)
+        flow_chr_pixels[5] = (flow_chr_pixels[5] << 1) | (flow_chr_pixels[5] >> 7)
+        flow_chr_pixels[6] = (flow_chr_pixels[6] << 1) | (flow_chr_pixels[6] >> 7)
+        flow_chr_pixels[7] = (flow_chr_pixels[7] << 1) | (flow_chr_pixels[7] >> 7)
+        flow_chr_pixels[8] = (flow_chr_pixels[8] << 1) | (flow_chr_pixels[8] >> 7)
+        flow_chr_pixels[9] = (flow_chr_pixels[9] << 1) | (flow_chr_pixels[9] >> 7)
+        flow_chr_pixels[10] = (flow_chr_pixels[10] << 1) | (flow_chr_pixels[10] >> 7)
+        flow_chr_pixels[11] = (flow_chr_pixels[11] << 1) | (flow_chr_pixels[11] >> 7)
+        flow_chr_pixels[12] = (flow_chr_pixels[12] << 1) | (flow_chr_pixels[12] >> 7)
+        flow_chr_pixels[13] = (flow_chr_pixels[13] << 1) | (flow_chr_pixels[13] >> 7)
+        flow_chr_pixels[14] = (flow_chr_pixels[14] << 1) | (flow_chr_pixels[14] >> 7)
+        flow_chr_pixels[15] = (flow_chr_pixels[15] << 1) | (flow_chr_pixels[15] >> 7)
+
+fn update_water_animation()
+    if !water_enabled || on_loading_screen || on_title_screen || title_selected_stage != 1
+        return
+
+    narrow_water_chr_timer += 1
+    if narrow_water_chr_timer >= 2
+        narrow_water_chr_timer = 0
+        narrow_chr_frame += 1
+        narrow_chr_frame &= 7
+
+    water_chr_timer += 1
+    if water_chr_timer >= 3
+        water_chr_timer = 0
+        wide_chr_frame += 1
+        wide_chr_frame &= 7
+
+    flow_chr_timer += 1
+    if flow_chr_timer >= 3
+        flow_chr_timer = 0
+        flow_chr_frame += 1
+        flow_chr_frame &= 7
+
+// Only change profiling color effects; keep rendering and left-edge visibility enabled.
+fn set_profile_tint(U tint)
+: +inline
+    if PROFILE_FRAME_TIME
+        profile_tint = tint
+        {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP | tint)
+
 nmi main_nmi()
     // Update OAM and poll the pads:
     ppu_upload_oam_poll_pads(0)
@@ -419,8 +879,8 @@ nmi main_nmi()
     upload_title_join_count()
     upload_title_stage_number()
 
-    // Turn on rendering:
-    {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP)
+    // Preserve the profiling band if work continues across an NMI.
+    {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP | profile_tint)
 
     // Reset the scroll https://www.nesdev.org/wiki/PPU_scrolling
     // and https://www.nesdev.org/wiki/Mirroring
@@ -432,11 +892,13 @@ mode main()
     load_screen(@lev_loading)
     hide_oam(0)
     // Tell the NES to trigger NMI once per frame:
-    {PPUCTRL}(PPUCTRL_NMI_ON)
+    {PPUCTRL}(PPUCTRL_NMI_ON | PPUCTRL_SPR_PT_1000)
 
     // Wait forever, one frame at a time:
     while true
         update_pads()
+        update_ground_brake_code()
+        update_water_code()
         spawn_rng_counter += 1
 
         if on_loading_screen
@@ -447,6 +909,7 @@ mode main()
             nmi
             continue
 
+        update_water_animation()
         update_bg_attr_2_palette_anim()
         update_life_flash_timers()
         update_death_effects()
@@ -482,6 +945,41 @@ mode main()
 
         update_sprites()
         nmi // Wait for the next NMI
+
+fn update_ground_brake_code()
+    // Player 4: Select, Select, Select, A, A, Select toggles the ground brake.
+    U pressed = pads[3].pressed
+    if pressed == 0
+        return
+
+    if pressed == ground_brake_disable_code[ground_brake_code_step]
+        ground_brake_code_step += 1
+        if ground_brake_code_step == 6
+            ground_attack_brake_enabled = !ground_attack_brake_enabled
+            ground_brake_code_step = 0
+    else if pressed == BUTTON_SELECT
+        // Repeated Select still leaves the last three Select presses matched.
+        if ground_brake_code_step != 3
+            ground_brake_code_step = 1
+    else
+        ground_brake_code_step = 0
+
+fn update_water_code()
+    // Player 4: Select, Select, Select, B, B, Select toggles water.
+    U pressed = pads[3].pressed
+    if pressed == 0
+        return
+
+    if pressed == water_toggle_code[water_code_step]
+        water_code_step += 1
+        if water_code_step == 6
+            water_enabled = !water_enabled
+            water_code_step = 0
+    else if pressed == BUTTON_SELECT
+        if water_code_step != 3
+            water_code_step = 1
+    else
+        water_code_step = 0
 
 fn any_start_pressed() Bool
     for U p = 0; p < NUM_PLAYERS; p += 1
@@ -522,7 +1020,7 @@ fn start_selected_stage()
             player_out[p] = true
             death_timer[p] = 0
 
-    {PPUCTRL}(PPUCTRL_NMI_ON)
+    {PPUCTRL}(PPUCTRL_NMI_ON | PPUCTRL_SPR_PT_1000)
 
 fn return_to_title_screen()
     if winner_player != NO_WINNER
@@ -536,7 +1034,7 @@ fn return_to_title_screen()
 
     load_screen(@lev_title)
     reset_match()
-    {PPUCTRL}(PPUCTRL_NMI_ON)
+    {PPUCTRL}(PPUCTRL_NMI_ON | PPUCTRL_SPR_PT_1000)
 
 fn player_in_title_join_zone(U p) Bool
     UU px = (player_x[p] >> 4) + (player_char_width >> 1)
@@ -601,6 +1099,7 @@ fn reset_match()
             knockback_x_vel[p] = 0
             knockback_y_vel[p] = 0
             katana_time[p] = 120
+            katana_followthrough_timer[p] = 0
             katana_dir[p] = face[p]
             clash_flash_timer[p] = 0
             clash_flash_dir[p] = katana_dir[p]
@@ -727,6 +1226,7 @@ fn start_player_death(U p, U attacker)
             death_timer[p] = RESPAWN_FRAMES
 
     katana_time[p] = 120
+    katana_followthrough_timer[p] = 0
     clash_flash_timer[p] = 0
     player_x_vel[p] = 0
     player_y_vel[p] = 0
@@ -826,6 +1326,7 @@ fn place_player_at_spawn(U p, U spawn)
     knockback_x_vel[p] = 0
     knockback_y_vel[p] = 0
     katana_time[p] = 120
+    katana_followthrough_timer[p] = 0
     katana_dir[p] = face[p]
     clash_flash_timer[p] = 0
     clash_flash_dir[p] = katana_dir[p]
@@ -861,39 +1362,10 @@ fn update_death_timers()
             if death_timer[p] == 0
                 respawn_player(p)
 
-fn sprite_palette_index(U p) U
-    return SPRITE_PALETTE_START + (p << 1) + p
-
 fn store_base_palette()
     for U i = 0; i < len(palette); i += 1
     : -unroll
         base_palette[i] = palette[i]
-
-fn restore_player_palette(U p)
-    U base = sprite_palette_index(p)
-    palette[base] = base_palette[base]
-    palette[base + 1] = base_palette[base + 1]
-    palette[base + 2] = base_palette[base + 2]
-
-fn flash_player_palette(U p)
-    U base = sprite_palette_index(p)
-    palette[base] = KILL_FLASH_COLOR
-    palette[base + 1] = KILL_FLASH_COLOR
-    palette[base + 2] = KILL_FLASH_COLOR
-
-fn update_kill_flash_palette()
-    Bool should_upload = false
-
-    for U p = 0; p < NUM_PLAYERS; p += 1
-        restore_player_palette(p)
-
-        if player_life_flash_timer[p] > 0
-            should_upload = true
-            if player_life_flash_timer[p] & 1
-                flash_player_palette(p)
-
-    if should_upload
-        palette_dirty = true
 
 fn update_bg_attr_2_palette_anim()
     bg_attr_2_anim_timer += 1
@@ -910,17 +1382,9 @@ fn update_bg_attr_2_palette_anim()
         palette_dirty = true
 
 fn update_life_flash_timers()
-    Bool had_flash = false
-
     for U p = 0; p < NUM_PLAYERS; p += 1
         if player_life_flash_timer[p] > 0
-            had_flash = true
             player_life_flash_timer[p] -= 1
-
-    update_kill_flash_palette()
-
-    if had_flash
-        palette_dirty = true
 
 fn update_corpses()
     for U c = 0; c < NUM_CORPSES; c += 1
@@ -1270,6 +1734,7 @@ fn katana_clash_player(U p)
     clash_flash_timer[p] = 2
     clash_flash_dir[p] = katana_dir[p]
     katana_time[p] = 90
+    katana_followthrough_timer[p] = 0
     player_x_vel[p] = 0
     knockback_x_vel[p] = 40
     knockback_y_vel[p] = 64
@@ -1361,6 +1826,13 @@ fn draw_player(U p, U i) U
             else
                 draw_x = 0
 
+    if katana_time[p] > 120 || katana_followthrough_timer[p] > 0
+        sprite_top = PLAYER_ATTACK_TILE
+        if katana_dir[p] == KATANA_LEFT
+            player_attr = p + ATTR_H_FLIP
+        else if katana_dir[p] == KATANA_RIGHT
+            player_attr = p
+
     reserve_sprite_row(pcy, 1)
     set_oam_x(i, draw_x)
     set_oam_y(i, pcy)
@@ -1368,7 +1840,7 @@ fn draw_player(U p, U i) U
     set_oam_a(i, player_attr)
     i += 4
 
-    if katana_time[p] > 120 || clash_flash_timer[p] > 0
+    if katana_time[p] > 120 || katana_followthrough_timer[p] > 0 || clash_flash_timer[p] > 0
         U visual_katana_dir = katana_dir[p]
         if clash_flash_timer[p] > 0 && katana_time[p] <= 120
             visual_katana_dir = clash_flash_dir[p]
@@ -1414,12 +1886,12 @@ fn draw_player(U p, U i) U
                 katana_tile = katana_vertical_sprite_tiles[0]
             else
                 katana_tile = katana_horizontal_sprite_tiles[0]
-        else if katana_time[p] >= 124
+        else if katana_time[p] >= 124 || katana_followthrough_timer[p] > 0
             if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
                 katana_tile = katana_vertical_sprite_tiles[2]
             else
                 katana_tile = katana_horizontal_sprite_tiles[2]
-        else if katana_time[p] >= 123
+        else if katana_time[p] >= 122
             if visual_katana_dir == KATANA_UP || visual_katana_dir == KATANA_DOWN
                 katana_tile = katana_vertical_sprite_tiles[1]
             else
@@ -1544,6 +2016,9 @@ fn draw_corpses(U i) U
         if pcy > CORPSE_DRAW_Y_LIFT
             pcy -= CORPSE_DRAW_Y_LIFT
         U corpse_attr = corpse_palette[c]
+        U corpse_tile = CORPSE_LEFT_TILE
+        if player_life_flash_timer[corpse_palette[c]] & 1
+            corpse_tile = CORPSE_FLASH_TILE
 
         if i > 252 || !can_fit_sprite_row(pcy, 1)
             corpse_state[c] = 0
@@ -1554,22 +2029,103 @@ fn draw_corpses(U i) U
         if corpse_face[c] == 0
             set_oam_x(i, pcx)
             set_oam_y(i, pcy)
-            set_oam_p(i, CORPSE_LEFT_TILE)
+            set_oam_p(i, corpse_tile)
             set_oam_a(i, corpse_attr)
             i += 4
         else
             corpse_attr += ATTR_H_FLIP
             set_oam_x(i, pcx)
             set_oam_y(i, pcy)
-            set_oam_p(i, CORPSE_LEFT_TILE)
+            set_oam_p(i, corpse_tile)
             set_oam_a(i, corpse_attr)
             i += 4
+
+    return i
+
+fn draw_water(U i) U
+    if !water_enabled || on_title_screen || title_selected_stage != 1
+        return i
+    if i > 252 || !can_fit_sprite_row(WATER_OUTLET_Y, 1)
+        return i
+
+    reserve_sprite_row(WATER_OUTLET_Y, 1)
+    set_oam(i, WATER_OUTLET_X, WATER_OUTLET_Y, WATER_PIPE_FRAME_BASE + wide_chr_frame, 0)
+    i += 4
+
+    if i <= 252 && can_fit_sprite_row(127, 1)
+        reserve_sprite_row(127, 1)
+        set_oam(i, 212, 127, WATER_WIDE_FRAME_BASE + wide_chr_frame, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(135, 1)
+        reserve_sprite_row(135, 1)
+        set_oam(i, 212, 135, WATER_WIDE_FRAME_BASE + wide_chr_frame, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(135, 1)
+        reserve_sprite_row(135, 1)
+        set_oam(i, 204, 135, WATER_FLOW_FRAME_BASE + flow_chr_frame, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(135, 1)
+        reserve_sprite_row(135, 1)
+        set_oam(i, 196, 135, WATER_FLOW_FRAME_BASE + flow_chr_frame, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(135, 1)
+        reserve_sprite_row(135, 1)
+        set_oam(i, 188, 135, WATER_CORNER_FRAME_BASE + flow_chr_frame, 0)
+        i += 4
+
+    U down_tile = WATER_NARROW_TOP_FRAME_BASE + narrow_chr_frame
+    U down_body_tile = WATER_NARROW_BODY_FRAME_BASE + narrow_chr_frame
+
+    if i <= 252 && can_fit_sprite_row(143, 1)
+        reserve_sprite_row(143, 1)
+        set_oam(i, 188, 143, down_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(151, 1)
+        reserve_sprite_row(151, 1)
+        set_oam(i, 188, 151, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(159, 1)
+        reserve_sprite_row(159, 1)
+        set_oam(i, 188, 159, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(167, 1)
+        reserve_sprite_row(167, 1)
+        set_oam(i, 188, 167, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(175, 1)
+        reserve_sprite_row(175, 1)
+        set_oam(i, 188, 175, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(183, 1)
+        reserve_sprite_row(183, 1)
+        set_oam(i, 188, 183, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(191, 1)
+        reserve_sprite_row(191, 1)
+        set_oam(i, 188, 191, down_body_tile, 0)
+        i += 4
+
+    if i <= 252 && can_fit_sprite_row(199, 1)
+        reserve_sprite_row(199, 1)
+        set_oam(i, 188, 199, down_body_tile, 0)
+        i += 4
 
     return i
 
 fn update_sprites()
     U i = 0
     reset_sprite_row_counts()
+    i = draw_water(i)
 
     for U p = 0; p < NUM_PLAYERS; p += 1
         if death_timer[p] == 0 && !player_out[p]
@@ -1588,18 +2144,31 @@ fn update_sprites()
 // this function calculates the movements of the player character
 fn move_player_x(U p)
     normal_x_mov(p)
+
+    // X movement runs before the attack timer advances. Brake only on frames
+    // that will have an active sword, including a newly pressed attack.
+    if ground_attack_brake_enabled && is_player_on_ground[p] && !(pads[p].pressed & BUTTON_A)
+        Bool ground_attack = katana_time[p] >= katana_kill_min && katana_time[p] < katana_kill_max
+        if (pads[p].pressed & BUTTON_B) && (katana_time[p] == 120 || katana_time[p] == 119)
+            ground_attack = true
+        if ground_attack
+            player_x_vel[p] = 0
+
     apply_position_x_subpixel(p)
     if clash_flash_timer[p] > 0
         clash_flash_timer[p] -= 1
     // --------------------------------
     // KATANA
     // --------------------------------
+    if katana_followthrough_timer[p] > 0
+        katana_followthrough_timer[p] -= 1
     if katana_time[p] < 120
         katana_time[p] += 1
     if katana_time[p] > 120
         katana_time[p] += 1
         if katana_time[p] > 124
             katana_time[p] = 90
+            katana_followthrough_timer[p] = KATANA_FOLLOWTHROUGH_FRAMES
     if (pads[p].pressed & BUTTON_B) && katana_time[p] == 120
         if pads[p].held & BUTTON_UP
             katana_dir[p] = KATANA_UP
@@ -1691,6 +2260,11 @@ fn normal_x_mov(U p)
 fn apply_position_x_subpixel(U p)
     // 1. Save old position
     old_x[p] = player_x[p]
+
+    // Input and acceleration have already run. With no X speed or knockback,
+    // position/collision work cannot change anything; friction also stays zero.
+    if player_x_vel[p] == 0 && knockback_x_vel[p] == 0
+        return
 
     // --------------------------------------------------
     // 2. PLAYER FORCE (magnitud + riktning)
@@ -1818,7 +2392,9 @@ fn normal_y_mov(U p)
     Bool was_on_ground = is_player_on_ground[p]
     U wall_contact_dir = WALL_NONE
     if !is_player_on_ground[p]
+        set_profile_tint(PROFILE_WALL_CONTACT_TINT)
         wall_contact_dir = wall_slide_contact_dir(p)
+        set_profile_tint(0)
 
     U wall_dir = wall_contact_dir
 
@@ -1950,10 +2526,19 @@ fn apply_position_y_subpixel(U p, U wall_dir)
         UU new_foot_y = new_py + PLAYER_BODY_HEIGHT + PLAYER_HEAD_OFFSET
         Bool ignore_platforms = platform_drop_timer[p] > 0
 
-        UU landing_py = landing_top_for_foot(px_left, old_foot_y, new_foot_y, ignore_platforms)
-        UU right_landing_py = landing_top_for_foot(px_right, old_foot_y, new_foot_y, ignore_platforms)
-        if right_landing_py < landing_py
-            landing_py = right_landing_py
+        U left_flags = collision_flags_at_pixel(px_left, new_foot_y)
+        UU landing_py = landing_top_for_foot(left_flags, px_left, old_foot_y, new_foot_y, ignore_platforms)
+        Bool same_tile = (px_left >> 4) == (px_right >> 4)
+
+        // Feet in the same metatile share flags. Air/full blocks/platforms also
+        // share the landing result; half tiles still need each foot tested.
+        if !same_tile || left_flags >= COLL_LEFT_HALF
+            U right_flags = left_flags
+            if !same_tile
+                right_flags = collision_flags_at_pixel(px_right, new_foot_y)
+            UU right_landing_py = landing_top_for_foot(right_flags, px_right, old_foot_y, new_foot_y, ignore_platforms)
+            if right_landing_py < landing_py
+                landing_py = right_landing_py
 
         if landing_py < WORLD_HEIGHT_PIXELS
             player_y[p] = landing_py << 4
@@ -1994,7 +2579,7 @@ fn apply_position_y_subpixel(U p, U wall_dir)
 
 fn ppu_reset_scroll_16(UU x, UU y)
     ppu_reset_scroll(x.a, y.a) // the 9th bits should go to ppuctrl right after
-    {PPUCTRL}(PPUCTRL_NMI_ON | (x.b & 1) | ((y.b & 1)<<1))  // Set PPU control register, we want NMIs
+    {PPUCTRL}(PPUCTRL_NMI_ON | PPUCTRL_SPR_PT_1000 | (x.b & 1) | ((y.b & 1)<<1))  // Set PPU control register, we want NMIs
 
 fn is_solid_metatile(U mt) Bool
     // Marked frame/corner pieces fill the entire 16x16 collision box.
@@ -2089,12 +2674,11 @@ fn landing_py_from_tile_top(UU tile_top) UU
 
     return WORLD_HEIGHT_PIXELS - (landing_offset - tile_top)
 
-fn landing_top_for_foot(UU x, UU old_foot_y, UU new_foot_y, Bool ignore_platforms) UU
+fn landing_top_for_foot(U flags, UU x, UU old_foot_y, UU new_foot_y, Bool ignore_platforms) UU
     UU test_foot_y = new_foot_y
     if test_foot_y >= WORLD_HEIGHT_PIXELS
         test_foot_y -= WORLD_HEIGHT_PIXELS
 
-    U flags = collision_flags_at_pixel(x, test_foot_y)
     UU tile_top = (test_foot_y >> 4) << 4
 
     if collision_flags_solid_at_pixel(flags, x, test_foot_y)
@@ -2113,11 +2697,18 @@ fn is_wall_at_pixel(U p, UU px) Bool
     UU py_top    = (player_y[p] >> 4) + PLAYER_HEAD_OFFSET + 1
     UU py_bottom = py_top + PLAYER_BODY_HEIGHT - 1
 
-    if is_solid_at_pixel(px, py_top)
+    U flags = collision_flags_at_pixel(px, py_top)
+    if collision_flags_solid_at_pixel(flags, px, py_top)
         return true
-    if is_solid_at_pixel(px, py_bottom)
-        return true
-    return false
+
+    // Both points share X. In the same metatile row, reuse the cached flags
+    // instead of looking them up again; half tiles still need the bottom test.
+    if (py_top >> 4) == (py_bottom >> 4)
+        if flags < COLL_LEFT_HALF
+            return false
+        return collision_flags_solid_at_pixel(flags, px, py_bottom)
+
+    return is_solid_at_pixel(px, py_bottom)
 
 fn is_corpse_wall_at_pixel(UU px, UU py_top) Bool
     UU py_bottom = py_top + UU(CORPSE_HEIGHT) - 1
@@ -2128,23 +2719,43 @@ fn is_corpse_wall_at_pixel(UU px, UU py_top) Bool
         return true
     return false
 
-fn is_wall_slide_at_pixel(U p, UU px) Bool
-    UU py = (player_y[p] >> 4) + PLAYER_HEAD_OFFSET + PLAYER_BODY_HEIGHT - 1
-
-    if is_solid_at_pixel(px, py)
+// These coordinates are already wrapped pixels. Avoid the generic 16-bit
+// coordinate/wrap path for this frequent, single-point wall-contact check.
+fn is_wall_slide_at_pixel(U px, U py) Bool
+: +inline
+    U index = (px & U(240)) | (py >> 4)
+    U flags = collision_map[index]
+    if flags < COLL_LEFT_HALF
+        return (flags & COLL_SOLID) != 0
+    if (flags & COLL_LEFT_HALF) && !(px & 8)
+        return true
+    if (flags & COLL_RIGHT_HALF) && (px & 8)
+        return true
+    if (flags & COLL_TOP_HALF) && !(py & 8)
+        return true
+    if (flags & COLL_BOTTOM_HALF) && (py & 8)
         return true
     return false
 
 fn wall_slide_contact_dir(U p) U
-    UU px_left = player_x[p] >> 4
+    U held = pads[p].held
+    if !(held & BUTTON_LEFT) && !(held & BUTTON_RIGHT)
+        return WALL_NONE
 
-    if pads[p].held & BUTTON_LEFT
+    U px_left = U(player_x[p] >> 4)
+    U py = U(player_y[p] >> 4) + U(7) // Same bottom contact point as before.
+    if py >= 240
+        py -= 240
+
+    if held & BUTTON_LEFT
+        // Preserve the existing behavior: no left-side contact across X=0.
         if px_left > 0
-            if is_wall_slide_at_pixel(p, px_left - 1)
+            if is_wall_slide_at_pixel(px_left - U(1), py)
                 return KATANA_LEFT
 
-    if pads[p].held & BUTTON_RIGHT
-        if is_wall_slide_at_pixel(p, px_left + player_char_width)
+    if held & BUTTON_RIGHT
+        U px_right = U(px_left + U(8)) // 8-bit wrap at the 256px right edge.
+        if is_wall_slide_at_pixel(px_right, py)
             return KATANA_RIGHT
 
     return WALL_NONE
