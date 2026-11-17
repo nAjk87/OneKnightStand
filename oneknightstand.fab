@@ -3,6 +3,8 @@
 mapfab(raw, "yee2.mapfab", "chr", "palette", "metatiles", "level")
 
 ct U NUM_PLAYERS = 4
+ct U BOT_DECISION_FRAMES = 8
+ct U BOT_JUMP_HOLD_FRAMES = 12
 
 ct UU player_char_width = 8
 ct UU player_char_height = 8
@@ -50,6 +52,7 @@ ct U katana_kill_max = 124
 ct U KATANA_FOLLOWTHROUGH_FRAMES = 5
 ct U[6] ground_brake_disable_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_A, BUTTON_A, BUTTON_SELECT)
 ct U[6] water_toggle_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_B, BUTTON_B, BUTTON_SELECT)
+ct U[6] bot_toggle_code = U[6](BUTTON_SELECT, BUTTON_SELECT, BUTTON_SELECT, BUTTON_A, BUTTON_B, BUTTON_SELECT)
 ct U KATANA_RIGHT = 0
 ct U KATANA_LEFT = 64
 ct U KATANA_UP = 1
@@ -60,7 +63,7 @@ ct U AIR_ACCEL = 1
 ct U GROUND_FRICTION = 3
 ct U GROUND_TURN_DECEL = 4
 ct U AIR_TURN_DECEL = 2
-ct U MAX_SPEED = 24
+ct U MAX_SPEED = 20
 ct U GRAVITY_JUMP_HELD = 3
 ct U GRAVITY_JUMP_RELEASED = 12
 ct U GRAVITY_FALL = 5
@@ -95,6 +98,7 @@ ct U TITLE_JOIN_COUNT_TILE_0 = $B0
 ct U TITLE_JOIN_COUNT_TILE_1 = $B1
 ct U TITLE_STAGE_TILE_1 = $B1
 ct UU TITLE_STAGE_COUNT_ADDR = $234A
+ct UU TITLE_CPU_STATUS_ADDR = $218D // Row 12, column 13, above the ready count.
 ct UU TITLE_JOIN_ZONE_X_MIN = 96
 ct UU TITLE_JOIN_ZONE_X_MAX = 160
 ct UU TITLE_JOIN_ZONE_Y_MIN = 144
@@ -187,6 +191,16 @@ vars /game_vars
     CC/metatiles mt_se
     CC/metatiles mt_attr
     U[256] collision_map
+    Bool bot_mode_enabled = false
+    Bool title_cpu_dirty = true
+    U[6] title_cpu_background
+    U bot_mode_code_step = 0
+    U bot_player_mask = 0 // Assigned at match start; title controls remain human.
+    U[NUM_PLAYERS] bot_previous_held
+    U[NUM_PLAYERS] bot_move_held
+    U[NUM_PLAYERS] bot_decision_timer
+    U[NUM_PLAYERS] bot_jump_timer
+    U[NUM_PLAYERS] bot_last_x
 
     U[NUM_PLAYERS] face        = U[NUM_PLAYERS](0,0,0,0)
     U[NUM_PLAYERS] want_face   = U[NUM_PLAYERS](0,0,0,0)
@@ -416,6 +430,38 @@ fn load_screen(CCC/levels my_lvl_pointer)
             i+=2
         ii+=32
         i=ii
+
+    if on_title_screen
+        {PPUCTRL}(0) // Restore horizontal PPU increment after the column loader.
+        ppu_reset_addr(TITLE_CPU_STATUS_ADDR)
+        {PPUDATA}()
+        title_cpu_background[0] = {PPUDATA}()
+        title_cpu_background[1] = {PPUDATA}()
+        title_cpu_background[2] = {PPUDATA}()
+        title_cpu_background[3] = {PPUDATA}()
+        title_cpu_background[4] = {PPUDATA}()
+        title_cpu_background[5] = {PPUDATA}()
+        title_cpu_dirty = true
+
+fn upload_title_cpu_status()
+    if !on_title_screen || !title_cpu_dirty
+        return
+    title_cpu_dirty = false
+    ppu_reset_addr(TITLE_CPU_STATUS_ADDR)
+    if bot_mode_enabled
+        {PPUDATA}(195) // C: PNG x24, y96.
+        {PPUDATA}(208) // P: PNG x0, y104.
+        {PPUDATA}(213) // U: PNG x40, y104.
+        {PPUDATA}(255) // Blank tile.
+        {PPUDATA}(207) // O: PNG x120, y96.
+        {PPUDATA}(206) // N: PNG x112, y96.
+    else
+        {PPUDATA}(title_cpu_background[0])
+        {PPUDATA}(title_cpu_background[1])
+        {PPUDATA}(title_cpu_background[2])
+        {PPUDATA}(title_cpu_background[3])
+        {PPUDATA}(title_cpu_background[4])
+        {PPUDATA}(title_cpu_background[5])
 
 fn upload_title_join_count()
     if !on_title_screen
@@ -868,6 +914,7 @@ nmi main_nmi()
 
     upload_title_join_count()
     upload_title_stage_number()
+    upload_title_cpu_status()
 
     // Turn on rendering.
     {PPUMASK}(PPUMASK_ON | PPUMASK_NO_CLIP)
@@ -889,6 +936,7 @@ mode main()
         update_pads()
         update_ground_brake_code()
         update_water_code()
+        Bool bot_mode_changed = update_bot_mode_code()
         spawn_rng_counter += 1
 
         if on_loading_screen
@@ -906,9 +954,13 @@ mode main()
 
         if on_title_screen
             update_title_join_count()
-            update_title_stage_select()
+            if !bot_mode_changed
+                update_title_stage_select()
             if title_join_count >= 2 && any_start_pressed()
-                start_selected_stage()
+                if title_ready_mask != 0
+                    start_selected_stage()
+
+        update_bot_inputs()
 
         if game_over
             update_corpses()
@@ -971,6 +1023,137 @@ fn update_water_code()
     else
         water_code_step = 0
 
+fn update_bot_mode_code() Bool
+    // Only the title screen accepts Player 4: Select x3, A, B, Select.
+    // The mode persists between matches; ownership is selected at each start.
+    if !on_title_screen || on_loading_screen
+        bot_mode_code_step = 0
+        return false
+    U pressed = pads[3].pressed
+    if pressed == 0
+        return false
+
+    if pressed == bot_toggle_code[bot_mode_code_step]
+        bot_mode_code_step += 1
+        if bot_mode_code_step == 6
+            bot_mode_enabled = !bot_mode_enabled
+            title_cpu_dirty = true
+            bot_mode_code_step = 0
+            return true // Consume final Select; the first three cycled back to the same stage.
+    else if pressed == BUTTON_SELECT
+        if bot_mode_code_step != 3
+            bot_mode_code_step = 1
+    else
+        bot_mode_code_step = 0
+
+    return false
+
+// Bots write the normal input fields, keeping physics and combat rules shared.
+// Physical player-4 cheat codes are processed before this override.
+fn update_bot_inputs()
+    if on_title_screen || bot_player_mask == 0
+        return
+
+    for U p = 0; p < NUM_PLAYERS; p += 1
+        if !(bot_player_mask & (U(1) << p))
+            continue
+        U held = 0
+        if !on_title_screen && !game_over && !player_out[p] && death_timer[p] == 0
+            if bot_jump_timer[p] > 0
+                bot_jump_timer[p] -= 1
+
+            held = bot_move_held[p]
+            if bot_decision_timer[p] == 0
+                bot_decision_timer[p] = BOT_DECISION_FRAMES - U(1)
+                held = choose_bot_input(p)
+                bot_move_held[p] = held & (BUTTON_LEFT | BUTTON_RIGHT)
+            else
+                bot_decision_timer[p] -= 1
+
+            if bot_jump_timer[p] > 0
+                held |= BUTTON_A
+        else
+            bot_move_held[p] = 0
+            bot_jump_timer[p] = 0
+
+        pads[p].held = held
+        pads[p].pressed = (~bot_previous_held[p]) & held
+        pads[p].released = (~held) & bot_previous_held[p]
+        bot_previous_held[p] = held
+
+fn choose_bot_input(U p) U
+    U px = U(player_x[p] >> 4)
+    U py = U(player_y[p] >> 4)
+    U target = NO_WINNER
+    UU best_distance = 512
+    UU target_dx = 0
+    UU target_dy = 0
+    Bool target_right = false
+    Bool target_above = false
+
+    // At most three opponents, with wrapped Manhattan distance (no pathfinding).
+    for U other = 0; other < NUM_PLAYERS; other += 1
+        if other == p || player_out[other] || death_timer[other] > 0
+            continue
+        U tx = U(player_x[other] >> 4)
+        U ty = U(player_y[other] >> 4)
+        Bool right = tx > px
+        Bool above = ty < py
+        UU dx
+        UU dy
+        if right
+            dx = UU(tx) - UU(px)
+        else
+            dx = UU(px) - UU(tx)
+        if above
+            dy = UU(py) - UU(ty)
+        else
+            dy = UU(ty) - UU(py)
+        if dx > 128
+            dx = WORLD_WIDTH_PIXELS - dx
+            right = !right
+        if dy > 120
+            dy = WORLD_HEIGHT_PIXELS - dy
+            above = !above
+        UU distance = dx + dy
+        if distance < best_distance
+            target = other
+            best_distance = distance
+            target_dx = dx
+            target_dy = dy
+            target_right = right
+            target_above = above
+
+    U previous_x = bot_last_x[p]
+    bot_last_x[p] = px
+    if target == NO_WINNER
+        return 0
+
+    U held = BUTTON_LEFT
+    if target_right
+        held = BUTTON_RIGHT
+
+    // Jump toward higher targets or when horizontal progress has stopped.
+    // Holding A briefly gives a useful jump; the release allows a new press.
+    if bot_jump_timer[p] == 0
+        Bool stuck = px == previous_x && bot_move_held[p] != 0
+        if is_player_on_ground[p]
+            if stuck || (target_above && target_dy > 12)
+                bot_jump_timer[p] = BOT_JUMP_HOLD_FRAMES
+        else if is_wall_sliding[p]
+            bot_jump_timer[p] = BOT_JUMP_HOLD_FRAMES
+
+    // Attack pulses only on decision frames and only after the normal cooldown.
+    if target_dx <= 14 && target_dy <= 14 && katana_time[p] == 120
+        held |= BUTTON_B
+        if target_dy > target_dx + UU(2)
+            if target_above
+                held |= BUTTON_UP
+            else
+                held |= BUTTON_DOWN
+
+    return held
+
 fn any_start_pressed() Bool
     for U p = 0; p < NUM_PLAYERS; p += 1
         if pads[p].pressed & BUTTON_START
@@ -1005,8 +1188,11 @@ fn start_selected_stage()
         load_screen(@lev_level1)
 
     reset_match()
+    if bot_mode_enabled
+        // Humans are exactly the ready players; fill the remaining four slots.
+        bot_player_mask = (~ready_mask) & U(15)
     for U p = 0; p < NUM_PLAYERS; p += 1
-        if !(ready_mask & (U(1) << p))
+        if !((ready_mask | bot_player_mask) & (U(1) << p))
             player_out[p] = true
             death_timer[p] = 0
 
@@ -1047,7 +1233,9 @@ fn update_title_join_count()
                 ready_mask |= U(1) << p
 
     title_join_count = count
-    title_ready_mask = ready_mask
+    if bot_mode_enabled && count > 0
+        title_join_count = NUM_PLAYERS // Display the filled match, not just humans.
+    title_ready_mask = ready_mask // Keep the pit mask human-only.
     if title_join_count != title_join_last_count
         title_join_last_count = title_join_count
         title_join_dirty = true
@@ -1063,6 +1251,8 @@ fn clear_corpses()
     next_corpse_slot = 0
 
 fn reset_match()
+    bot_player_mask = 0
+    bot_mode_code_step = 0
     game_over = false
     winner_player = NO_WINNER
     game_over_return_timer = 0
@@ -1072,6 +1262,11 @@ fn reset_match()
     clear_corpses()
 
     for U p = 0; p < NUM_PLAYERS; p += 1
+        bot_previous_held[p] = 0
+        bot_move_held[p] = 0
+        bot_decision_timer[p] = p << 1 // Stagger expensive decisions across frames.
+        bot_jump_timer[p] = 0
+        bot_last_x[p] = 0
         player_lives[p] = STARTING_LIVES
         player_life_flash_timer[p] = 0
         player_out[p] = false
