@@ -1,6 +1,9 @@
 
 
 mapfab(raw, "yee2.mapfab", "chr", "palette", "metatiles", "level")
+// PUF still needs its silent music definitions when only sound effects are used.
+audio(puf1_music)
+audio(puf1_sfx, "audio/kill.txt", "audio/kill.nsf")
 
 ct U NUM_PLAYERS = 4
 ct U BOT_DECISION_FRAMES = 8
@@ -928,6 +931,12 @@ nmi main_nmi()
 mode main()
 : nmi main_nmi
 
+    puf.init(SYSTEM_PAL)
+    // No music track initializes the APU: enable only pulse 2 and noise here.
+    {SQ2_SWEEP}($08)
+    {SQ2_VOL}($30)
+    {NOISE_VOL}($30)
+    {SND_CHN}($0A)
     load_screen(@lev_loading)
     hide_oam(0)
     // Tell the NES to trigger NMI once per frame:
@@ -987,6 +996,8 @@ mode main()
                         move_player_y(p)
                 check_katanas()
 
+        // Process the kill event this frame, before the next frame wait.
+        puf.process($0A) // Pulse 2 + noise only; no music or DPCM.
         update_sprites()
         nmi // Wait for the next NMI
 
@@ -1410,6 +1421,7 @@ fn check_katanas()
     check_match_over()
 
 fn start_player_death(U p, U attacker)
+    puf.play_sfx(puf_sfx_kill)
     hitstop_timer = HITSTOP_FRAMES
     start_player_corpse(p, attacker)
     spawn_death_particles(p, attacker)
