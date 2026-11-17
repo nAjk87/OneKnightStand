@@ -11,7 +11,7 @@ ct UU player_char_height = 8
 ct UU PLAYER_HEAD_OFFSET = 0
 ct UU PLAYER_BODY_HEIGHT = 8
 
-ct UU[NUM_PLAYERS] player_initial_x = UU[NUM_PLAYERS](40,60,80,100)
+ct UU[NUM_PLAYERS] player_initial_x = UU[NUM_PLAYERS](40,60,80,36)
 ct UU[NUM_PLAYERS] player_initial_y = UU[NUM_PLAYERS](124,40,40,120)
 ct U NUM_SPAWN_POINTS = 13
 ct U LEVEL1_SPAWN_POINTS = 13
