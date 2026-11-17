@@ -201,6 +201,8 @@ vars /game_vars
     U[NUM_PLAYERS] bot_decision_timer
     U[NUM_PLAYERS] bot_jump_timer
     U[NUM_PLAYERS] bot_last_x
+    U[NUM_PLAYERS] bot_attack_wait
+    U bot_random_state = 93
 
     U[NUM_PLAYERS] face        = U[NUM_PLAYERS](0,0,0,0)
     U[NUM_PLAYERS] want_face   = U[NUM_PLAYERS](0,0,0,0)
@@ -1075,6 +1077,7 @@ fn update_bot_inputs()
         else
             bot_move_held[p] = 0
             bot_jump_timer[p] = 0
+            bot_attack_wait[p] = 0
 
         pads[p].held = held
         pads[p].pressed = (~bot_previous_held[p]) & held
@@ -1127,6 +1130,7 @@ fn choose_bot_input(U p) U
     U previous_x = bot_last_x[p]
     bot_last_x[p] = px
     if target == NO_WINNER
+        bot_attack_wait[p] = 0
         return 0
 
     U held = BUTTON_LEFT
@@ -1143,14 +1147,26 @@ fn choose_bot_input(U p) U
         else if is_wall_sliding[p]
             bot_jump_timer[p] = BOT_JUMP_HOLD_FRAMES
 
-    // Attack pulses only on decision frames and only after the normal cooldown.
+    // Hesitate for 1-2 decision intervals (8-16 frames) before attacking.
+    // Leaving range cancels the attempt, so bots can miss an opportunity.
     if target_dx <= 14 && target_dy <= 14 && katana_time[p] == 120
-        held |= BUTTON_B
-        if target_dy > target_dx + UU(2)
-            if target_above
-                held |= BUTTON_UP
-            else
-                held |= BUTTON_DOWN
+        if bot_attack_wait[p] == 0
+            U low_bit = bot_random_state & U(1)
+            bot_random_state >>= 1
+            if low_bit
+                bot_random_state ^= U($B8)
+            bot_attack_wait[p] = U(1) + (bot_random_state & U(1))
+        else
+            bot_attack_wait[p] -= 1
+            if bot_attack_wait[p] == 0
+                held |= BUTTON_B
+                if target_dy > target_dx + UU(2)
+                    if target_above
+                        held |= BUTTON_UP
+                    else
+                        held |= BUTTON_DOWN
+    else
+        bot_attack_wait[p] = 0
 
     return held
 
@@ -1253,6 +1269,7 @@ fn clear_corpses()
 fn reset_match()
     bot_player_mask = 0
     bot_mode_code_step = 0
+    bot_random_state = spawn_rng_counter | U(1)
     game_over = false
     winner_player = NO_WINNER
     game_over_return_timer = 0
@@ -1267,6 +1284,7 @@ fn reset_match()
         bot_decision_timer[p] = p << 1 // Stagger expensive decisions across frames.
         bot_jump_timer[p] = 0
         bot_last_x[p] = 0
+        bot_attack_wait[p] = 0
         player_lives[p] = STARTING_LIVES
         player_life_flash_timer[p] = 0
         player_out[p] = false
